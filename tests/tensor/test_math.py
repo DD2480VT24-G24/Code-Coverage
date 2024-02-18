@@ -1,6 +1,7 @@
 import builtins
 import operator
 import pickle
+import unittest
 from copy import copy
 from functools import reduce
 from itertools import product
@@ -1930,6 +1931,33 @@ class TestMean:
     def test_list(self):
         ll = [shared(0.0), shared(2.0)]
         assert mean(ll).eval() == 1
+
+
+class UnitTestMean(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.coverage = {i: False for i in range(16)}
+
+    @classmethod
+    def tearDownClass(cls):
+        print(f"{sum(cls.coverage.values()) / len(cls.coverage) * 100:.2f}%")
+        print(cls.coverage)
+
+    def test_matrix_mean_default_axis(self):
+        res = mean(np.linspace(1, 9, 9).reshape(3, 3))
+        assert res.eval() == 5.0
+
+    def test_matrix_mean_off_axis_int(self):
+        res = mean(np.linspace(1, 9, 9).reshape(3, 3), axis=1)
+        assert np.allclose(res.eval(), [2.0, 5.0, 8.0])
+
+    def test_matrix_mean_off_axis_empty_ndarray(self):
+        res = mean(np.linspace(1, 9, 9).reshape(3, 3), axis=np.array(1))
+        assert np.allclose(res.eval(), [2.0, 5.0, 8.0])
+
+    def test_matrix_mean_off_axis_index_tuple(self):
+        res = mean(np.linspace(1, 9, 9).reshape(3, 3), axis=(0, 1))
+        assert res.eval() == 5.0
 
 
 def test_dot_numpy_inputs():
