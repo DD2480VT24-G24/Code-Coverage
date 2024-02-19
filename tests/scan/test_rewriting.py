@@ -878,6 +878,8 @@ class TestScanMerge:
         """
         Test the method belongs_to of this class. Specifically see if it
         detects the two `Scan` nodes as not being similar.
+
+        (covers branching on 1961-1966)
         """
         inps = vector()
         state = scalar()
@@ -896,6 +898,95 @@ class TestScanMerge:
         opt_obj = ScanMerge()
         assert not opt_obj.belongs_to_set(scan_node1, [scan_node2])
         assert not opt_obj.belongs_to_set(scan_node2, [scan_node1])
+
+    def test_belongs_to_set_different_n_steps(self):
+        """
+        Test the method belongs_to_scan of this class. Specifically see if 
+        the method returns false when the one `Scan` node and the nodes in the set has different n_step.
+
+        This is done by calling the scan method with different n_step values.
+        (covers branch on line 1980-1981)
+        """
+
+        inps = vector()
+        state = scalar()
+        y1, _ = scan(lambda x, y: x * y, sequences=inps, outputs_info=state, n_steps=5)
+        y2, _ = scan(lambda x, y: x * y, sequences=inps, outputs_info=state, n_steps=8)
+
+        scan_node1 = y1.owner.inputs[0].owner
+        assert isinstance(scan_node1.op, Scan)
+        scan_node2 = y2.owner.inputs[0].owner
+        assert isinstance(scan_node2.op, Scan)
+
+        opt_obj = ScanMerge()
+        assert not opt_obj.belongs_to_set(scan_node1, [scan_node2])
+        assert not opt_obj.belongs_to_set(scan_node2, [scan_node1])
+
+    def test_belongs_to_set_check_node_in_one_item_set(self):
+        """
+        Test the method belongs_to_scan of this class. Specifically see if 
+        the method returns false when one `Scan` node is sent into the method and the set
+        only contains of this `Scan` node.
+
+        This is done by creating one node and sending it in as both the first and second parameter (The second in a list).
+
+        (covers branch on line 1984-1986)
+        """
+
+        inps = vector()
+        state = scalar()
+        y1, _ = scan(lambda x, y: x * y, sequences=inps, outputs_info=state, n_steps=5)
+
+        scan_node1 = y1.owner.inputs[0].owner
+        scan_node2 = y1.owner.inputs[0].owner
+        assert isinstance(scan_node1.op, Scan)
+        
+        opt_obj = ScanMerge()
+        assert not opt_obj.belongs_to_set(scan_node1, [scan_node2])
+
+    def test_belongs_to_set_check_as_while(self):
+        """
+        Test the method belongs_to_scan of this class. Specifically see if 
+        the method returns True when as_while is false.
+
+        This is done by making two different `scan` nodes (neither of needs to use a while)
+
+        (covers branch on line 1988-1989)
+        """
+        inps = vector()
+        state = scalar()
+        
+        y1, _ = scan(lambda x, y: x * y, sequences=inps, outputs_info=state, n_steps=5)
+        y2, _ = scan(lambda x, y: x + y, sequences=inps, outputs_info=state, n_steps=5)
+
+        scan_node1 = y1.owner.inputs[0].owner
+        scan_node2 = y2.owner.inputs[0].owner
+
+        opt_obj = ScanMerge()
+        assert opt_obj.belongs_to_set(scan_node1, [scan_node2])
+
+    def test_belongs_to_set_check_identical_while_cond(self):
+        """
+        Test the method belongs_to_scan of this class. Specifically see if 
+        the method returns False when the while conditions isn't equal.
+
+        This is done by making two different `scan` nodes, with different while conditions.
+
+        (covers branch on line 1994-1997)
+        """
+        inps = vector()
+        state = scalar()
+        
+        #make one while cond to [gt: 0] and one [lt: 0]
+        y1, _ = scan(lambda x, y: (x * y, until(x > 0)), sequences=inps, outputs_info=state, n_steps=5)
+        y2, _ = scan(lambda x, y: (x + y, until(x < 0)), sequences=inps, outputs_info=state, n_steps=5)
+
+        scan_node1 = y1.owner.inputs[0].owner
+        scan_node2 = y2.owner.inputs[0].owner
+
+        opt_obj = ScanMerge()
+        assert not opt_obj.belongs_to_set(scan_node1, [scan_node2])
+
 
     @config.change_flags(cxx="")  # Just for faster compilation
     def test_while_scan(self):
