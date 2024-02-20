@@ -561,48 +561,7 @@ def get_slice_elements(idxs: list, cond: Callable) -> list:
 
     return ret
 
-
-def index_vars_to_types(entry, slice_ok=True):
-    r"""Change references to `Variable`s into references to `Type`s.
-
-    The `Subtensor.idx_list` field is unique to each `Subtensor` instance.  It
-    is not unique to each `Apply` node, so it should not refer to specific
-    `Variable`s.
-
-    TODO WRITEME: This function also accepts an `entry` already being a `Type`;
-    when would that happen?
-
-    """
-    if (
-        isinstance(entry, (np.ndarray, Variable))
-        and hasattr(entry, "dtype")
-        and entry.dtype == "bool"
-    ):
-        raise AdvancedIndexingError("Invalid index type or slice for Subtensor")
-
-    if isinstance(entry, Variable) and (
-        entry.type in invalid_scal_types or entry.type in invalid_tensor_types
-    ):
-        raise TypeError("Expected an integer")
-
-    if isinstance(entry, Variable) and entry.type in scal_types:
-        return entry.type
-    elif isinstance(entry, Type) and entry in scal_types:
-        return entry
-
-    if (
-        isinstance(entry, Variable)
-        and entry.type in tensor_types
-        and all(entry.type.broadcastable)
-    ):
-        return ps.get_scalar_type(entry.type.dtype)
-    elif isinstance(entry, Type) and entry in tensor_types and all(entry.broadcastable):
-        return ps.get_scalar_type(entry.dtype)
-    elif slice_ok and isinstance(entry, slice):
-        a = entry.start
-        b = entry.stop
-        c = entry.step
-
+def vars_to_slice(a,b,c):
         if a is not None:
             slice_a = index_vars_to_types(a, False)
         else:
@@ -622,10 +581,42 @@ def index_vars_to_types(entry, slice_ok=True):
             slice_c = None
 
         return slice(slice_a, slice_b, slice_c)
+def index_vars_to_types(entry, slice_ok=True):
+    r"""Change references to `Variable`s into references to `Type`s.
+
+    The `Subtensor.idx_list` field is unique to each `Subtensor` instance.  It
+    is not unique to each `Apply` node, so it should not refer to specific
+    `Variable`s.
+
+    TODO WRITEME: This function also accepts an `entry` already being a `Type`;
+    when would that happen?
+
+    """
+    if (
+        isinstance(entry, (np.ndarray, Variable))
+        and hasattr(entry, "dtype")
+        and entry.dtype == "bool"
+    ):
+        raise AdvancedIndexingError("Invalid index type or slice for Subtensor")
+    
+    if isinstance(entry, Variable):
+        if entry.type in invalid_scal_types + invalid_tensor_types:
+            raise TypeError("Expected an integer")
+        elif entry.type in scal_types:
+            return entry.type
+        elif (entry.type in tensor_types and all(entry.type.broadcastable)):
+            return ps.get_scalar_type(entry.type.dtype)
+    elif isinstance(entry, Type):
+        if entry in scal_types:
+            return entry
+        if entry in tensor_types and all(entry.broadcastable):
+            return ps.get_scalar_type(entry.dtype)
+    elif slice_ok and isinstance(entry, slice):
+        return vars_to_slice(entry.start,entry.stop,entry.step)
     elif isinstance(entry, (int, np.integer)):
         raise TypeError()
     else:
-        raise AdvancedIndexingError("Invalid index type or slice for Subtensor")
+        raise AdvancedIndexingError("Invalid index type or slice for Subtensor") 
 
 
 def get_constant_idx(
