@@ -538,44 +538,57 @@ def check_and_normalize_axes(x, axis):
     axis: list of integers
         Return an empty list if argument is None.
 
+    Cyclomatic complexity:
+    
+    Excluding raise as exit point:
+    pi = total amount of decisions = 19
+    s = total amount of exit points = 1
+    M = pi - s + 2 = 19 - 1 + 2 = 20
+
+    Including raise as exit point:
+    pi = 19
+    s = 3
+    M = pi - s + 2 = 19 - 3 + 2 = 18
+
     """
     x = as_tensor_variable(x)
-    if axis is None:
+
+    if axis is None: # 1 Decision 
         axis = []
     elif isinstance(axis, (int, np.integer)) or (
         isinstance(axis, np.ndarray) and axis.ndim == 0
-    ):
+    ): # 3 Decision 
         axis = [int(axis)]
-    elif isinstance(axis, (tuple, list, np.ndarray)):
-        axis = [int(i) for i in axis]
-    elif isinstance(axis, Variable):
-        if NoneConst.equals(axis):
+    elif isinstance(axis, (tuple, list, np.ndarray)): # 1 Decision 
+        axis = [int(i) for i in axis] # 1 Decision 
+    elif isinstance(axis, Variable): # 1 Decision 
+        if NoneConst.equals(axis): # 1 Decision 
             axis = []
-        elif not isinstance(axis, TensorConstant):
-            raise TypeError(f"Computation needs a constant axis. Got {axis}")
+        elif not isinstance(axis, TensorConstant): # 1 Decision 
+            raise TypeError(f"Computation needs a constant axis. Got {axis}") # Potential exit point
         else:
             assert axis.dtype in integer_dtypes
             if isinstance(axis.data, (int, np.integer)) or (
                 isinstance(axis.data, np.ndarray) and axis.data.ndim == 0
-            ):
+            ): # 3 Decisions
                 axis = [int(axis.data)]
-            elif isinstance(axis.data, (list, np.ndarray)):
-                axis = [int(i) for i in axis.data]
+            elif isinstance(axis.data, (list, np.ndarray)): # 1 Decision 
+                axis = [int(i) for i in axis.data] # 1 Decision 
     else:
         raise TypeError(
             f"Axis must be an integer, tuple, list of integers or a TensorVariable. Got {axis}"
-        )
-    if len(axis) > 0:
-        for i in range(len(axis)):
-            if axis[i] < 0:
+        ) # Potential exit point
+    if len(axis) > 0: # 1 Decision 
+        for i in range(len(axis)): # 1 Decision 
+            if axis[i] < 0: # 1 Decision 
                 axis[i] += x.type.ndim
-            if axis[i] < 0 or axis[i] >= x.type.ndim:
+            if axis[i] < 0 or axis[i] >= x.type.ndim: # 2 Decisions
                 raise ValueError(
                     f"Computation needs a valid axis number for {int(x.type.ndim)}-D tensor. Got {int(axis[i])}"
-                )
+                ) # Potential exit point
         axis = list(set(axis))
         axis.sort()
-    return axis
+    return axis # Exit point
 
 
 def max_and_argmax(a, axis=None, keepdims=False):
