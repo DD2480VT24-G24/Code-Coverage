@@ -25,8 +25,10 @@ from pytensor.printing import pprint
 from pytensor.scalar.basic import as_scalar
 from pytensor.tensor import get_vector_length, vectorize
 from pytensor.tensor.blockwise import Blockwise
+from pytensor.tensor import Constant
 from pytensor.tensor.elemwise import DimShuffle
 from pytensor.tensor.math import exp, isinf
+from pytensor.graph.type import Type
 from pytensor.tensor.math import sum as pt_sum
 from pytensor.tensor.subtensor import (
     AdvancedIncSubtensor,
@@ -141,6 +143,27 @@ class TestGetCanonicalFormSlice(unittest.TestCase):
         # Assertions to check the result is valid despite the error.
         assert isinstance(result, pytensor.tensor.variable.TensorVariable)  # Or any specific check relevant to your case.
         assert flag == 1  # The flag should be 1 as per the function's contract.
+
+    def test_slice_constant_conditions(self):
+        class TInt32(Type):
+            def filter(self, data):
+                return int(data)
+
+        int32 = TInt32()
+
+        start_constant = Constant(int32, 1, name='start')
+        stop_constant = Constant(int32, 5, name='stop')
+        step_constant = Constant(int32, 2, name='step')
+        length_constant = Constant(int32, 10, name='length')
+
+        theslice = slice(start_constant, stop_constant, step_constant)
+
+        result_slice, reverse_flag = get_canonical_form_slice(theslice, length_constant, coverage=self.coverage)
+
+        assert result_slice.start == 1
+        assert result_slice.stop == 5
+        assert result_slice.step == 2
+        assert reverse_flag == 1
 
     def test_scalar_constant(self):
         a = as_scalar(0)
