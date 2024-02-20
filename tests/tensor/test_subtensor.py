@@ -2684,31 +2684,28 @@ def test_pprint_IncSubtensor(indices, set_instead_of_inc, exp_res):
 def test_index_vars_to_types():
     x = ptb.as_tensor_variable(np.array([True, False]))
 
-    # Test line 1
+    # Test
     # isinstance(entry, (np.ndarray, Variable))
     # and hasattr(entry, "dtype")
     # and entry.dtype == "bool"
     with pytest.raises(AdvancedIndexingError):
         index_vars_to_types(x)
     
-    # Test line (New) 2
+    # Test (New)
     # isinstance(entry, Variable) and (
     # entry.type in invalid_scal_types or entry.type in invalid_tensor_types
     x = ptb.as_tensor_variable(1.4)
     with pytest.raises(TypeError):
         index_vars_to_types(x)
     
-    # Test line 590 3
+    # Test
     # isinstance(entry, Variable) and entry.type in scal_types
     x = scal.constant(1, dtype=np.uint8)
     assert isinstance(x.type, scal.ScalarType)
     res = index_vars_to_types(x)
     assert res == x.type 
 
-    # Test line 4
-
-
-    # Test line (New) 5
+    # Test (New)
     # isinstance(entry, Variable)
     # and entry.type in tensor_types
     # and all(entry.type.broadcastable) 
@@ -2718,25 +2715,23 @@ def test_index_vars_to_types():
     z = pt.iscalar('t2')    
     assert str(res) == str(z.type.dtype)
 
-    # Test line 598 6
+    # Test
     # isinstance(entry, Type) and entry in tensor_types and all(entry.broadcastable)
     res = index_vars_to_types(iscalar)
     assert isinstance(res, scal.ScalarType)
     
-    # Test lin 606 7, 9 & 11 (New)
+    # Test (New)
     # slice_ok and isinstance(entry, slice)
     res = index_vars_to_types(slice(None, None))
     assert isinstance(res, slice)
     assert res == slice(None, None)
 
-    # Test line 13 (New)
+    # Test (New)
     # slice_ok and isinstance(entry, slice) but where C is None
     res = index_vars_to_types(slice(None, None, None))
     assert isinstance(res, slice)
     assert res == slice(None, None, None)
     
-
-    # Test line 630 14
     with pytest.raises(TypeError):
         index_vars_to_types(1)
 
