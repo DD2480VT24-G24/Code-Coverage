@@ -129,6 +129,12 @@ class TestGetCanonicalFormSlice(unittest.TestCase):
         'branch_10': False, 'branch_11': False, 'branch_13': False,
         'branch_16': False
     }
+
+    New Coverage Report: 0.916666%
+    Branches not covered:
+    {
+        'branch_13': False, 'branch_16': False
+    }
     """
 
     @classmethod
@@ -169,11 +175,21 @@ class TestGetCanonicalFormSlice(unittest.TestCase):
 
     def test_full_slice_with_step_one(self):
         length_constant = Constant(int32, 10, name='length')
-        theslice = slice(None, None, 1)  # Equivalent to `:` or `0:length:1`
+        theslice = slice(None, None, 1)  # Equivalent to `:` or `:length:1`
         result_slice, reverse_flag = get_canonical_form_slice(theslice, length_constant, coverage=self.coverage)
 
         assert result_slice.start == 0
         assert result_slice.stop == length_constant.data
+        assert result_slice.step == 1
+        assert reverse_flag == 1
+
+    def test_slice_with_positive_stop_less_than_length(self):
+        length_constant = Constant(int32, 10, name='length')
+        stop_constant = Constant(int32, 5, name='length')
+        theslice = slice(None, stop_constant, 1)  # Equivalent to `:stop_value:1`
+        result_slice, reverse_flag = get_canonical_form_slice(theslice, length_constant, coverage=self.coverage)
+
+        assert result_slice.start == 0
         assert result_slice.step == 1
         assert reverse_flag == 1
 
