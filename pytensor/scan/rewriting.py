@@ -1945,6 +1945,22 @@ class ScanMerge(GraphRewriter):
 
         return list(zip(outer_outs, new_outs))
 
+    def firstCheck(op, rep_op):
+        """
+        Helper function for the belongs_to_set method. The use of this method
+        is to reduce the cyclomatic complexity.
+        """
+        if(op.info.as_while != rep_op.info.as_while
+            or op.truncate_gradient != rep_op.truncate_gradient
+            or op.mode != rep_op.mode):
+            return True
+        else:
+            return False
+        
+    
+
+        
+
     def belongs_to_set(self, node, set_nodes):
         """
         This function checks if node `node` belongs to `set_nodes`, in the
@@ -1958,24 +1974,10 @@ class ScanMerge(GraphRewriter):
         op = node.op
         rep_node = set_nodes[0]
         rep_op = rep_node.op
-        if (
-            op.info.as_while != rep_op.info.as_while
-            or op.truncate_gradient != rep_op.truncate_gradient
-            or op.mode != rep_op.mode
-        ):
+        if (firstCheck(op, rep_op)):
             return False
 
-        nsteps = node.inputs[0]
-        try:
-            nsteps = int(get_underlying_scalar_constant_value(nsteps))
-        except NotScalarConstantError:
-            pass
-
-        rep_nsteps = rep_node.inputs[0]
-        try:
-            rep_nsteps = int(get_underlying_scalar_constant_value(rep_nsteps))
-        except NotScalarConstantError:
-            pass
+        nsteps, rep_nsteps = parseSteps(node, rep_node)
 
         if nsteps != rep_nsteps:
             return False
@@ -2019,6 +2021,24 @@ class ScanMerge(GraphRewriter):
             )
 
         return equal_computations(conds, rep_conds)
+    
+    def parseSteps(node, rep_node):
+        """
+        Helper function for the belongs_to_set method. The use of this method
+        is to reduce the cyclomatic complexity.
+        """
+        nsteps = node.inputs[0]
+        try:
+            nsteps = int(get_underlying_scalar_constant_value(nsteps))
+        except NotScalarConstantError:
+            pass
+
+        rep_nsteps = rep_node.inputs[0]
+        try:
+            rep_nsteps = int(get_underlying_scalar_constant_value(rep_nsteps))
+        except NotScalarConstantError:
+            pass
+        return nsteps, rep_nsteps
 
     def apply(self, fgraph):
         # Collect all scan nodes ordered according to toposort
