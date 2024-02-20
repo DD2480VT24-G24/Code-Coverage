@@ -14,6 +14,7 @@ from numpy.testing import assert_array_equal
 import pytensor
 import pytensor.scalar as scal
 import pytensor.tensor.basic as ptb
+from pytensor.tensor.type import scalar
 from pytensor import function
 from pytensor.compile import DeepCopyOp, shared
 from pytensor.compile.io import In
@@ -128,6 +129,18 @@ class TestGetCanonicalFormSlice(unittest.TestCase):
     def tearDownClass(cls):
         print(sum([v for v in cls.coverage.values()]) / len(cls.coverage))
         print("Not covered branches:", {k: v for k, v in cls.coverage.items() if not v})
+
+    def test_handle_not_scalar_constant_error(self):
+        # Create a symbolic variable that cannot be directly converted to an index literal.
+        theslice = scalar('a', dtype='int32')  # This will be treated as a non-constant variable.
+        length = as_scalar(10)  # Use a scalar for length.
+
+        # Call the function, expecting it to handle NotScalarConstantError internally.
+        result, flag = get_canonical_form_slice(theslice, length, coverage=self.coverage)
+
+        # Assertions to check the result is valid despite the error.
+        assert isinstance(result, pytensor.tensor.variable.TensorVariable)  # Or any specific check relevant to your case.
+        assert flag == 1  # The flag should be 1 as per the function's contract.
 
     def test_scalar_constant(self):
         a = as_scalar(0)
