@@ -1954,54 +1954,60 @@ class ScanMerge(GraphRewriter):
         have the same value for truncate_gradient, and have the same mode.
         Questionable, we should also consider profile ?
 
+        Cyclomatic complexity:
+        
+        pi = total amount of decisions = 17
+        s = total amount of exit points = 7
+        M = pi - s + 2 = 17 - 7 + 2 = 12
+
         """
         op = node.op
         rep_node = set_nodes[0]
         rep_op = rep_node.op
-        if (
+        if ( #3 decisions
             op.info.as_while != rep_op.info.as_while
             or op.truncate_gradient != rep_op.truncate_gradient
-            or op.mode != rep_op.mode
+            or op.mode != rep_op.mode 
         ):
-            return False
+            return False # exit point
 
         nsteps = node.inputs[0]
-        try:
+        try: #1 decision
             nsteps = int(get_underlying_scalar_constant_value(nsteps))
         except NotScalarConstantError:
             pass
 
         rep_nsteps = rep_node.inputs[0]
-        try:
+        try: #1 decision
             rep_nsteps = int(get_underlying_scalar_constant_value(rep_nsteps))
         except NotScalarConstantError:
             pass
 
-        if nsteps != rep_nsteps:
-            return False
+        if nsteps != rep_nsteps: #1 decision
+            return False #exit point
 
         # Check to see if it is an input of a different node
-        for nd in set_nodes:
-            if apply_depends_on(node, nd) or apply_depends_on(nd, node):
-                return False
+        for nd in set_nodes: #1 decision
+            if apply_depends_on(node, nd) or apply_depends_on(nd, node): #2 decisions
+                return False # exit point
 
-        if not op.info.as_while:
-            return True
+        if not op.info.as_while: #1 decision
+            return True # exit point
 
         # We need to check the while conditions are identical
         conds = [op.inner_outputs[-1]]
         rep_conds = [rep_op.inner_outputs[-1]]
-        if not equal_computations(
+        if not equal_computations( #1 decision
             conds, rep_conds, op.inner_inputs, rep_op.inner_inputs
         ):
-            return False
+            return False # exit point
 
         # If they depend on inner inputs we need to check for equivalence on the respective outer inputs
-        nominal_inputs = [a for a in ancestors(conds) if isinstance(a, NominalVariable)]
-        if not nominal_inputs:
-            return True
+        nominal_inputs = [a for a in ancestors(conds) if isinstance(a, NominalVariable)] #2 decisions
+        if not nominal_inputs: #1 decision
+            return True # exit point
         rep_nominal_inputs = [
-            a for a in ancestors(rep_conds) if isinstance(a, NominalVariable)
+            a for a in ancestors(rep_conds) if isinstance(a, NominalVariable) #2 decision
         ]
 
         conds = []
@@ -2012,13 +2018,14 @@ class ScanMerge(GraphRewriter):
         ]
         inner_inputs = op.inner_inputs
         rep_inner_inputs = rep_op.inner_inputs
-        for nominal_input, rep_nominal_input in zip(nominal_inputs, rep_nominal_inputs):
+        for nominal_input, rep_nominal_input in zip(nominal_inputs, rep_nominal_inputs): #1 decision
             conds.append(node.inputs[mapping[inner_inputs.index(nominal_input)]])
             rep_conds.append(
                 rep_node.inputs[rep_mapping[rep_inner_inputs.index(rep_nominal_input)]]
             )
 
-        return equal_computations(conds, rep_conds)
+        return equal_computations(conds, rep_conds) # exit point
+
 
     def apply(self, fgraph):
         # Collect all scan nodes ordered according to toposort
