@@ -606,11 +606,9 @@ def index_vars_to_types(entry, slice_ok=True):
         return ps.get_scalar_type(entry.type.dtype)
     # Pi = 3, S = 1
     elif isinstance(entry, Type) and entry in tensor_types and all(entry.broadcastable):
-        print("6")
         return ps.get_scalar_type(entry.dtype)
     # Pi = 2, S = 1
     elif slice_ok and isinstance(entry, slice):
-        print("7")
         a = entry.start
         b = entry.stop
         c = entry.step
