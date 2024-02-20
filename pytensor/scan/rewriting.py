@@ -2004,28 +2004,29 @@ class ScanMerge(GraphRewriter):
         nsteps, rep_nsteps = self.parseSteps(node, rep_node)
 
         if nsteps != rep_nsteps:
-            return False
+            return False #exit point
 
         # Check to see if it is an input of a different node
         for nd in set_nodes:
-            if apply_depends_on(node, nd) or apply_depends_on(nd, node):
-                return False
+            if apply_depends_on(node, nd) or apply_depends_on(nd, node): #2 decisions
+                return False # exit point
 
-        if not op.info.as_while:
-            return True
+        if not op.info.as_while: #1 decision
+            return True # exit point
 
         # We need to check the while conditions are identical
         conds = [op.inner_outputs[-1]]
         rep_conds = [rep_op.inner_outputs[-1]]
-        if not equal_computations(
+        if not equal_computations( #1 decision
             conds, rep_conds, op.inner_inputs, rep_op.inner_inputs
         ):
-            return False
+            return False # exit point
 
         # If they depend on inner inputs we need to check for equivalence on the respective outer inputs
         nominal_inputs, rep_nominal_inputs = self.create_nominal_inputs(conds, rep_conds)
         if not nominal_inputs:
             return True
+
 
         conds = []
         rep_conds = []
@@ -2035,13 +2036,14 @@ class ScanMerge(GraphRewriter):
         ]
         inner_inputs = op.inner_inputs
         rep_inner_inputs = rep_op.inner_inputs
-        for nominal_input, rep_nominal_input in zip(nominal_inputs, rep_nominal_inputs):
+        for nominal_input, rep_nominal_input in zip(nominal_inputs, rep_nominal_inputs): #1 decision
             conds.append(node.inputs[mapping[inner_inputs.index(nominal_input)]])
             rep_conds.append(
                 rep_node.inputs[rep_mapping[rep_inner_inputs.index(rep_nominal_input)]]
             )
 
-        return equal_computations(conds, rep_conds)
+        return equal_computations(conds, rep_conds) # exit point
+
 
     def apply(self, fgraph):
         # Collect all scan nodes ordered according to toposort
