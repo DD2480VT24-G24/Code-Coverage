@@ -112,6 +112,14 @@ def test_as_index_literal():
     assert res is np.newaxis
 
 
+class TInt32(Type):
+    def filter(self, data):
+        return int(data)
+
+
+int32 = TInt32()
+
+
 class TestGetCanonicalFormSlice(unittest.TestCase):
     """
     Original Coverage Report: 0.708333%
@@ -145,12 +153,6 @@ class TestGetCanonicalFormSlice(unittest.TestCase):
         assert flag == 1  # The flag should be 1 as per the function's contract.
 
     def test_slice_constant_conditions(self):
-        class TInt32(Type):
-            def filter(self, data):
-                return int(data)
-
-        int32 = TInt32()
-
         start_constant = Constant(int32, 1, name='start')
         stop_constant = Constant(int32, 5, name='stop')
         step_constant = Constant(int32, 2, name='step')
@@ -163,6 +165,16 @@ class TestGetCanonicalFormSlice(unittest.TestCase):
         assert result_slice.start == 1
         assert result_slice.stop == 5
         assert result_slice.step == 2
+        assert reverse_flag == 1
+
+    def test_full_slice_with_step_one(self):
+        length_constant = Constant(int32, 10, name='length')
+        theslice = slice(None, None, 1)  # Equivalent to `:` or `0:length:1`
+        result_slice, reverse_flag = get_canonical_form_slice(theslice, length_constant, coverage=self.coverage)
+
+        assert result_slice.start == 0
+        assert result_slice.stop == length_constant.data
+        assert result_slice.step == 1
         assert reverse_flag == 1
 
     def test_scalar_constant(self):
