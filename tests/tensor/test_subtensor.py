@@ -2,6 +2,10 @@ import logging
 import sys
 from io import StringIO
 
+import sys, os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
+
 import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
@@ -105,10 +109,22 @@ def test_as_index_literal():
 
 
 class TestGetCanonicalFormSlice:
+    """
+    Original Coverage Report: 0.708333%
+    Branches not covered:
+    {
+        'branch_2': False, 'branch_5': False, 'branch_6': False,
+        'branch_10': False, 'branch_11': False, 'branch_13': False,
+        'branch_16': False
+    }
+    """
+    def __init__(self):
+        self.coverage = {f"branch_{i}": False for i in range(24)}
+
     def test_scalar_constant(self):
         a = as_scalar(0)
         length = lscalar()
-        res = get_canonical_form_slice(a, length)
+        res = get_canonical_form_slice(a, length, coverage=self.coverage)
         assert res[0].owner.op == ptb.switch
         assert res[1] == 1
 
@@ -117,7 +133,7 @@ class TestGetCanonicalFormSlice:
         stop = iscalar("e")
         step = iscalar("s")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(start, stop, step), length)
+        cnf = get_canonical_form_slice(slice(start, stop, step), length, coverage=self.coverage)
         f = pytensor.function(
             [start, stop, step, length],
             [
@@ -143,7 +159,7 @@ class TestGetCanonicalFormSlice:
         stop = iscalar("e")
         step = iscalar("s")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(None, stop, step), length)
+        cnf = get_canonical_form_slice(slice(None, stop, step), length, coverage=self.coverage)
         f = pytensor.function(
             [stop, step, length],
             [
@@ -168,7 +184,7 @@ class TestGetCanonicalFormSlice:
         start = iscalar("b")
         step = iscalar("s")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(start, None, step), length)
+        cnf = get_canonical_form_slice(slice(start, None, step), length, coverage=self.coverage)
         f = pytensor.function(
             [start, step, length],
             [
@@ -193,7 +209,7 @@ class TestGetCanonicalFormSlice:
         start = iscalar("b")
         stop = iscalar("e")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(start, stop, None), length)
+        cnf = get_canonical_form_slice(slice(start, stop, None), length, coverage=self.coverage)
         f = pytensor.function(
             [start, stop, length],
             [
@@ -217,7 +233,7 @@ class TestGetCanonicalFormSlice:
     def test_start_stop_None(self):
         step = iscalar("s")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(None, None, step), length)
+        cnf = get_canonical_form_slice(slice(None, None, step), length, coverage=self.coverage)
         f = pytensor.function(
             [step, length],
             [
@@ -240,7 +256,7 @@ class TestGetCanonicalFormSlice:
     def test_stop_step_None(self):
         start = iscalar("b")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(start, None, None), length)
+        cnf = get_canonical_form_slice(slice(start, None, None), length, coverage=self.coverage)
         f = pytensor.function(
             [start, length],
             [
@@ -263,7 +279,7 @@ class TestGetCanonicalFormSlice:
     def test_start_step_None(self):
         stop = iscalar("e")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(None, stop, None), length)
+        cnf = get_canonical_form_slice(slice(None, stop, None), length, coverage=self.coverage)
         f = pytensor.function(
             [stop, length],
             [
@@ -283,6 +299,16 @@ class TestGetCanonicalFormSlice:
             assert np.all(t_out == v_out)
             assert np.all(t_out.shape == v_out.shape)
 
+
+obj = TestGetCanonicalFormSlice()
+for name in dir(obj):
+    if name.startswith("test_"):
+        print("Running", name)
+        getattr(obj, name)()
+
+# in obj.coverage calculate the sum of values that is false divided by the total number of values
+print(sum([not v for v in obj.coverage.values()]) / len(obj.coverage))
+print(obj.coverage)
 
 class TestSubtensor(utt.OptimizationTestMixin):
     """
