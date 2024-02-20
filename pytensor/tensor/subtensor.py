@@ -200,15 +200,15 @@ def get_canonical_form_slice(
     """
     from pytensor.tensor import ge, lt, sign, switch
 
-    if not isinstance(theslice, slice):
-        try:
+    if not isinstance(theslice, slice):     # Edge 1
+        try:        # Edge 2
             value = as_index_literal(theslice)
         except NotScalarConstantError:
             value = theslice
 
         value = switch(lt(value, 0), (value + length), value)
 
-        return value, 1
+        return value, 1     # Node 1
 
     def analyze(x):
         try:
@@ -229,12 +229,12 @@ def get_canonical_form_slice(
         and is_stop_constant
         and is_step_constant
         and is_length_constant
-    ):
+    ):      # Edge 3
         _start, _stop, _step = slice(start, stop, step).indices(length)
-        if _start <= _stop and _step >= 1:
-            return slice(_start, _stop, _step), 1
+        if _start <= _stop and _step >= 1:      # Edge 4
+            return slice(_start, _stop, _step), 1       # Node 2
 
-    if step is None:
+    if step is None:        # Edge 5
         step = 1
         is_step_constant = True
 
@@ -242,7 +242,7 @@ def get_canonical_form_slice(
     # either `start` or `stop` is a range boundary. More specializations
     # could be added later. This makes the resulting graph smaller than
     # in the generic case below.
-    if step == 1:
+    if step == 1:       # Edge 6
         is_start_0 = (
             start is None
             or start == 0
@@ -252,19 +252,19 @@ def get_canonical_form_slice(
                 and start < 0
                 and start + length <= 0
             )
-        )
+        )       # Edge 7
         is_stop_length = (
             stop is None
             or stop in [length, sys.maxsize]
             or (is_stop_constant and is_length_constant and stop >= length)
-        )
-        if is_start_0:
+        )       # Edge 8
+        if is_start_0:      # Edge 9
             # 0:stop:1
-            if is_stop_length:
+            if is_stop_length:      # Edge 10
                 # Full slice.
-                return slice(0, length, 1), 1
-            if is_stop_constant and stop >= 0:
-                return (slice(0, switch(lt(stop, length), stop, length), 1), 1)
+                return slice(0, length, 1), 1       # Node 3
+            if is_stop_constant and stop >= 0:      # Edge 11
+                return (slice(0, switch(lt(stop, length), stop, length), 1), 1)     # Node 4
             stop_plus_len = stop + length
             stop = switch(
                 lt(stop, 0),
@@ -279,11 +279,11 @@ def get_canonical_form_slice(
                 # stop >= 0: use min(stop, length)
                 switch(lt(stop, length), stop, length),
             )
-            return slice(0, stop, 1), 1
-        elif is_stop_length:
+            return slice(0, stop, 1), 1     # Node 5
+        elif is_stop_length:        # Edge 12
             # start:length:1
-            if is_start_constant and start >= 0:
-                return slice(switch(lt(start, length), start, length), length, 1), 1
+            if is_start_constant and start >= 0:        # Edge 13
+                return slice(switch(lt(start, length), start, length), length, 1), 1        # Node 6
             start_plus_len = start + length
             start = switch(
                 lt(start, 0),
@@ -298,28 +298,28 @@ def get_canonical_form_slice(
                 # start >= 0: use min(start, length)
                 switch(lt(start, length), start, length),
             )
-            return slice(start, length, 1), 1
+            return slice(start, length, 1), 1       # Node 7
 
     # This is the generic case.
 
-    if is_step_constant:
+    if is_step_constant:        # Edge 14
         # When we know the sign of `step`, the graph can be made simpler.
-        assert step != 0
-        if step > 0:
+        assert step != 0    # Node 8
+        if step > 0:        # Edge 15
 
             def switch_neg_step(a, b):
                 return b
 
             abs_step = step
             sgn_step = 1
-        else:
+        else:       # Edge 16
 
             def switch_neg_step(a, b):
                 return a
 
             abs_step = -step
             sgn_step = -1
-    else:
+    else:       # Edge 17
         is_step_neg = lt(step, 0)
 
         def switch_neg_step(a, b):
@@ -330,18 +330,18 @@ def get_canonical_form_slice(
 
     defstart = switch_neg_step(length - 1, 0)
     defstop = switch_neg_step(-1, length)
-    if start is None:
+    if start is None:       # Edge 18
         start = defstart
-    else:
+    else:       # Edge 19
         start = switch(lt(start, 0), start + length, start)
         start = switch(lt(start, 0), switch_neg_step(-1, 0), start)
         start = switch(ge(start, length), switch_neg_step(length - 1, length), start)
-    if stop is None or stop == sys.maxsize:
+    if stop is None or stop == sys.maxsize:     # Edge 20
         # The special "maxsize" case is probably not needed here,
         # as slices containing maxsize are not generated by
         # __getslice__ anymore.
         stop = defstop
-    else:
+    else:       # Edge 21
         stop = switch(lt(stop, 0), stop + length, stop)
         stop = switch(lt(stop, 0), -1, stop)
         stop = switch(ge(stop, length), length, stop)
@@ -358,11 +358,11 @@ def get_canonical_form_slice(
     nw_start = switch(lt(nw_start, nw_stop), nw_start, nw_stop)
 
     nw_step = abs_step
-    if step != 1:
+    if step != 1:       # Edge 22
         reverse = sgn_step
-        return slice(nw_start, nw_stop, nw_step), reverse
-    else:
-        return slice(nw_start, nw_stop, nw_step), 1
+        return slice(nw_start, nw_stop, nw_step), reverse       # Node 9
+    else:       # Edge 23
+        return slice(nw_start, nw_stop, nw_step), 1     # Node 10
 
 
 def range_len(slc):
