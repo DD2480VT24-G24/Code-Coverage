@@ -1945,7 +1945,7 @@ class ScanMerge(GraphRewriter):
 
         return list(zip(outer_outs, new_outs))
 
-    def firstCheck(op, rep_op):
+    def first_check(self, op, rep_op):
         """
         Helper function for the belongs_to_set method. The use of this method
         is to reduce the cyclomatic complexity.
@@ -1957,9 +1957,33 @@ class ScanMerge(GraphRewriter):
         else:
             return False
         
-    
+    def parse_steps(self, node, rep_node):
+        """
+        Helper function for the belongs_to_set method. The use of this method
+        is to reduce the cyclomatic complexity.
+        """
+        nsteps = node.inputs[0]
+        try:
+            nsteps = int(get_underlying_scalar_constant_value(nsteps))
+        except NotScalarConstantError:
+            pass
 
-        
+        rep_nsteps = rep_node.inputs[0]
+        try:
+            rep_nsteps = int(get_underlying_scalar_constant_value(rep_nsteps))
+        except NotScalarConstantError:
+            pass
+        return nsteps, rep_nsteps
+
+    def create_nominal_inputs(self, conds, rep_conds):
+        """
+        Helper function for the belongs_to_set method. The use of this method
+        is to reduce the cyclomatic complexity.
+        """
+        nominal_inputs = [a for a in ancestors(conds) if isinstance(a, NominalVariable)]
+        rep_nominal_inputs = [a for a in ancestors(rep_conds) if isinstance(a, NominalVariable)]
+
+        return nominal_inputs, rep_nominal_inputs
 
     def belongs_to_set(self, node, set_nodes):
         """
@@ -1974,10 +1998,10 @@ class ScanMerge(GraphRewriter):
         op = node.op
         rep_node = set_nodes[0]
         rep_op = rep_node.op
-        if (firstCheck(op, rep_op)):
+        if (self.firstCheck(op, rep_op)):
             return False
 
-        nsteps, rep_nsteps = parseSteps(node, rep_node)
+        nsteps, rep_nsteps = self.parseSteps(node, rep_node)
 
         if nsteps != rep_nsteps:
             return False
@@ -1999,12 +2023,9 @@ class ScanMerge(GraphRewriter):
             return False
 
         # If they depend on inner inputs we need to check for equivalence on the respective outer inputs
-        nominal_inputs = [a for a in ancestors(conds) if isinstance(a, NominalVariable)]
+        nominal_inputs, rep_nominal_inputs = self.create_nominal_inputs(conds, rep_conds)
         if not nominal_inputs:
             return True
-        rep_nominal_inputs = [
-            a for a in ancestors(rep_conds) if isinstance(a, NominalVariable)
-        ]
 
         conds = []
         rep_conds = []
@@ -2021,24 +2042,6 @@ class ScanMerge(GraphRewriter):
             )
 
         return equal_computations(conds, rep_conds)
-    
-    def parseSteps(node, rep_node):
-        """
-        Helper function for the belongs_to_set method. The use of this method
-        is to reduce the cyclomatic complexity.
-        """
-        nsteps = node.inputs[0]
-        try:
-            nsteps = int(get_underlying_scalar_constant_value(nsteps))
-        except NotScalarConstantError:
-            pass
-
-        rep_nsteps = rep_node.inputs[0]
-        try:
-            rep_nsteps = int(get_underlying_scalar_constant_value(rep_nsteps))
-        except NotScalarConstantError:
-            pass
-        return nsteps, rep_nsteps
 
     def apply(self, fgraph):
         # Collect all scan nodes ordered according to toposort
