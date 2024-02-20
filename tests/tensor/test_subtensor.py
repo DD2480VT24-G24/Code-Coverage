@@ -8,6 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
 
 import numpy as np
 import pytest
+import unittest
 from numpy.testing import assert_array_equal
 
 import pytensor
@@ -108,7 +109,7 @@ def test_as_index_literal():
     assert res is np.newaxis
 
 
-class TestGetCanonicalFormSlice:
+class TestGetCanonicalFormSlice(unittest.TestCase):
     """
     Original Coverage Report: 0.708333%
     Branches not covered:
@@ -118,8 +119,15 @@ class TestGetCanonicalFormSlice:
         'branch_16': False
     }
     """
-    def __init__(self):
-        self.coverage = {f"branch_{i}": False for i in range(24)}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.coverage = {f"branch_{i}": False for i in range(24)}
+
+    @classmethod
+    def tearDownClass(cls):
+        print(sum([v for v in cls.coverage.values()]) / len(cls.coverage))
+        print("Not covered branches:", {k: v for k, v in cls.coverage.items() if not v})
 
     def test_scalar_constant(self):
         a = as_scalar(0)
@@ -299,16 +307,6 @@ class TestGetCanonicalFormSlice:
             assert np.all(t_out == v_out)
             assert np.all(t_out.shape == v_out.shape)
 
-
-obj = TestGetCanonicalFormSlice()
-for name in dir(obj):
-    if name.startswith("test_"):
-        print("Running", name)
-        getattr(obj, name)()
-
-# in obj.coverage calculate the sum of values that is false divided by the total number of values
-print(sum([not v for v in obj.coverage.values()]) / len(obj.coverage))
-print(obj.coverage)
 
 class TestSubtensor(utt.OptimizationTestMixin):
     """
@@ -2777,3 +2775,7 @@ def test_vectorize_subtensor_without_batch_indices():
         vectorize_pt(x_test, start_test),
         vectorize_np(x_test, start_test),
     )
+
+
+if __name__ in "__main__":
+    unittest.main()
