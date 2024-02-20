@@ -1585,7 +1585,9 @@ class Mean(FixedOpCAReduce):
 #      return grad(mean(x, self.axis, op=False),[x])
 
 
-def mean(input, axis=None, dtype=None, op=False, keepdims=False, acc_dtype=None):
+def mean(
+    input, axis=None, dtype=None, op=False, keepdims=False, acc_dtype=None, coverage={}
+):
     """
     Computes the mean value along the given axis(es) of a tensor `input`.
 
@@ -1610,35 +1612,58 @@ def mean(input, axis=None, dtype=None, op=False, keepdims=False, acc_dtype=None)
         be in a float type). If None, then we use the same rules as `sum()`.
     """
     input = as_tensor_variable(input)
+    # node 1
     if op:
+        # node 1.1
+        coverage[0] = True
         if dtype not in (None, "float64"):
+            # node 1.1.1 exit
+            coverage[1] = True
             raise NotImplementedError(
                 "The Mean op does not support the dtype argument, "
                 "and will always use float64. If you want to specify "
                 "the dtype, call tensor.mean(..., op=False).",
                 dtype,
             )
+        # node 1.2
         if acc_dtype not in (None, "float64"):
+            # node 1.2.1 exit
+            coverage[2] = True
             raise NotImplementedError(
                 "The Mean op does not support the acc_dtype argument, "
                 "and will always use float64. If you want to specify "
                 "acc_dtype, call tensor.mean(..., op=False).",
                 dtype,
             )
+        # node 1.3
         out = Mean(axis)(input)
         if keepdims:
+            # node 1.3.1
+            coverage[3] = True
             out = makeKeepDims(input, out, axis)
+        # node 1.4 exit
         return out
+    # node 2 (10)
+    coverage[16] = True
 
     if dtype is not None:
+        # node 2.1
+        coverage[4] = True
         # The summation will be done with the specified dtype.
         # sum() will complain if it is not suitable.
         sum_dtype = dtype
     else:
+        # node 2.2
+        coverage[5] = True
         sum_dtype = None
         # float16 overflows on the cast way too often
         if input.dtype == "float16":
+            # node 2.2.1
+            coverage[6] = True
             sum_dtype = "float32"
+        # node 2.3
+
+    # node 3 (7)
 
     s = sum(input, axis=axis, dtype=sum_dtype, keepdims=keepdims, acc_dtype=acc_dtype)
     shp = shape(input)
@@ -1647,29 +1672,53 @@ def mean(input, axis=None, dtype=None, op=False, keepdims=False, acc_dtype=None)
     # TODO Once we have a consistent casting policy, we could simply
     # use true_div.
     if s.dtype in ("float16", "float32", "complex64"):
+        # node 3.1
+        coverage[7] = True
         shp = cast(shp, "float32")
     else:
+        # node 3.2
+        coverage[8] = True
         shp = cast(shp, "float64")
 
+    # node 4 (4)
     if axis is None:
+        # node 4.1
+        coverage[9] = True
         axis = list(range(input.ndim))
     elif isinstance(axis, (int, np.integer)):
+        # node 4.2
+        coverage[10] = True
         axis = [axis]
     elif isinstance(axis, np.ndarray) and axis.ndim == 0:
+        # node 4.3
+        coverage[11] = True
         axis = [int(axis)]
     else:
+        # node 4.4
+        coverage[12] = True
         axis = [int(a) for a in axis]
+    # node 5 (10)
 
     # This sequential division will possibly be optimized by PyTensor:
     for i in axis:
+        # node 5.1
+        coverage[13] = True
         s = true_div(s, shp[i])
+
+    # node 6 (3)
 
     # This can happen when axis is an empty list/tuple
     if s.dtype != shp.dtype and s.dtype in discrete_dtypes:
+        # node 6.1
+        coverage[14] = True
         s = cast(s, shp.dtype)
 
+    # node 7
     if dtype == "float16" or (dtype is None and input.dtype == "float16"):
+        # node 7.1
+        coverage[15] = True
         s = cast(s, "float16")
+    # node 8
     s.name = "mean"
     return s
 
