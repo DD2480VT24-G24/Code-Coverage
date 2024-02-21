@@ -1945,6 +1945,46 @@ class ScanMerge(GraphRewriter):
 
         return list(zip(outer_outs, new_outs))
 
+    def first_check(self, op, rep_op):
+        """
+        Helper function for the belongs_to_set method. The use of this method
+        is to reduce the cyclomatic complexity.
+        """
+        if(op.info.as_while != rep_op.info.as_while
+            or op.truncate_gradient != rep_op.truncate_gradient
+            or op.mode != rep_op.mode):
+            return True
+        else:
+            return False
+        
+    def parse_steps(self, node, rep_node):
+        """
+        Helper function for the belongs_to_set method. The use of this method
+        is to reduce the cyclomatic complexity.
+        """
+        nsteps = node.inputs[0]
+        try:
+            nsteps = int(get_underlying_scalar_constant_value(nsteps))
+        except NotScalarConstantError:
+            pass
+
+        rep_nsteps = rep_node.inputs[0]
+        try:
+            rep_nsteps = int(get_underlying_scalar_constant_value(rep_nsteps))
+        except NotScalarConstantError:
+            pass
+        return nsteps, rep_nsteps
+
+    def create_nominal_inputs(self, conds, rep_conds):
+        """
+        Helper function for the belongs_to_set method. The use of this method
+        is to reduce the cyclomatic complexity.
+        """
+        nominal_inputs = [a for a in ancestors(conds) if isinstance(a, NominalVariable)]
+        rep_nominal_inputs = [a for a in ancestors(rep_conds) if isinstance(a, NominalVariable)]
+
+        return nominal_inputs, rep_nominal_inputs
+
     def belongs_to_set(self, node, set_nodes):
         """
         This function checks if node `node` belongs to `set_nodes`, in the
@@ -1954,40 +1994,20 @@ class ScanMerge(GraphRewriter):
         have the same value for truncate_gradient, and have the same mode.
         Questionable, we should also consider profile ?
 
-        Cyclomatic complexity:
-        
-        pi = total amount of decisions = 17
-        s = total amount of exit points = 7
-        M = pi - s + 2 = 17 - 7 + 2 = 12
-
         """
         op = node.op
         rep_node = set_nodes[0]
         rep_op = rep_node.op
-        if ( #3 decisions
-            op.info.as_while != rep_op.info.as_while
-            or op.truncate_gradient != rep_op.truncate_gradient
-            or op.mode != rep_op.mode 
-        ):
-            return False # exit point
+        if (self.firstCheck(op, rep_op)):
+            return False
 
-        nsteps = node.inputs[0]
-        try: #1 decision
-            nsteps = int(get_underlying_scalar_constant_value(nsteps))
-        except NotScalarConstantError:
-            pass
+        nsteps, rep_nsteps = self.parseSteps(node, rep_node)
 
-        rep_nsteps = rep_node.inputs[0]
-        try: #1 decision
-            rep_nsteps = int(get_underlying_scalar_constant_value(rep_nsteps))
-        except NotScalarConstantError:
-            pass
-
-        if nsteps != rep_nsteps: #1 decision
+        if nsteps != rep_nsteps:
             return False #exit point
 
         # Check to see if it is an input of a different node
-        for nd in set_nodes: #1 decision
+        for nd in set_nodes:
             if apply_depends_on(node, nd) or apply_depends_on(nd, node): #2 decisions
                 return False # exit point
 
@@ -2003,12 +2023,10 @@ class ScanMerge(GraphRewriter):
             return False # exit point
 
         # If they depend on inner inputs we need to check for equivalence on the respective outer inputs
-        nominal_inputs = [a for a in ancestors(conds) if isinstance(a, NominalVariable)] #2 decisions
-        if not nominal_inputs: #1 decision
-            return True # exit point
-        rep_nominal_inputs = [
-            a for a in ancestors(rep_conds) if isinstance(a, NominalVariable) #2 decision
-        ]
+        nominal_inputs, rep_nominal_inputs = self.create_nominal_inputs(conds, rep_conds)
+        if not nominal_inputs:
+            return True
+
 
         conds = []
         rep_conds = []

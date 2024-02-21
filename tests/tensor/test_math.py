@@ -1,6 +1,7 @@
 import builtins
 import operator
 import pickle
+import unittest
 from copy import copy
 from functools import reduce
 from itertools import product
@@ -44,6 +45,7 @@ from pytensor.tensor.math import (
     Prod,
     ProdWithoutZeros,
     Sum,
+    check_and_normalize_axes,
     _allclose,
     _dot,
     abs,
@@ -267,7 +269,7 @@ def test_maximum_minimum_grad():
 
         f = function([x, y], g)
         assert np.allclose(f([1], [1]), [[1], [0]])
-
+    
 
 TestMinimumBroadcast = makeBroadcastTester(
     op=minimum,
@@ -1910,26 +1912,55 @@ class TestDivimpl:
         assert np.allclose(function([i, c], c / i)(5, complex(5, 3)), ((5 + 3j) / 5.0))
 
 
-class TestMean:
+class TestMean(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.coverage = {i: False for i in range(16)}
+
+    @classmethod
+    def tearDownClass(cls):
+        print(f"{sum(cls.coverage.values()) / len(cls.coverage) * 100:.2f}%")
+        print(cls.coverage)
+
     def test_mean_single_element(self):
-        res = mean(np.zeros(1))
+        res = mean(np.zeros(1), coverage=self.coverage)
         assert res.eval() == 0.0
 
     def test_mean_f16(self):
         x = vector(dtype="float16")
-        y = x.mean()
+        y = mean(x, coverage=self.coverage)
         f = function([x], y)
         utt.assert_allclose(f(np.ones((100000,), dtype="float16")), 1.0)
 
     def test_basic(self):
         x = vector()
-        f = function([x], mean(x))
+        f = function([x], mean(x, coverage=self.coverage))
         data = random(50)
         assert np.allclose(f(data), np.mean(data))
 
     def test_list(self):
         ll = [shared(0.0), shared(2.0)]
-        assert mean(ll).eval() == 1
+        assert mean(ll, coverage=self.coverage).eval() == 1
+
+    def test_matrix_mean_default_axis(self):
+        res = mean(np.linspace(1, 9, 9).reshape(3, 3), coverage=self.coverage)
+        assert res.eval() == 5.0
+
+    def test_matrix_mean_off_axis_int(self):
+        res = mean(np.linspace(1, 9, 9).reshape(3, 3), axis=1, coverage=self.coverage)
+        assert np.allclose(res.eval(), [2.0, 5.0, 8.0])
+
+    def test_matrix_mean_off_axis_empty_ndarray(self):
+        res = mean(
+            np.linspace(1, 9, 9).reshape(3, 3), axis=np.array(1), coverage=self.coverage
+        )
+        assert np.allclose(res.eval(), [2.0, 5.0, 8.0])
+
+    def test_matrix_mean_off_axis_index_tuple(self):
+        res = mean(
+            np.linspace(1, 9, 9).reshape(3, 3), axis=(0, 1), coverage=self.coverage
+        )
+        assert res.eval() == 5.0
 
 
 def test_dot_numpy_inputs():
@@ -3641,3 +3672,60 @@ class TestPolyGamma:
         n = scalar(dtype="int64")
         with pytest.raises(NullTypeGradError):
             grad(polygamma(n, 0.5), wrt=n)
+
+class TestCheckAndNormalizeAxes:
+
+    def test_check_and_normalize_axes_axis_none(self):
+        """
+        Test the method check_and_normalize_axes. Specifically see if 
+        the method returns an empty array when input `axis` is None.
+        This test covers the branch on line 543. As seen in the branch, it returns 
+        an empty list.
+        """
+
+        x = np.zeros((1, 1, 1, 1)) 
+        axis = None
+        ret = check_and_normalize_axes(x, axis)
+        assert ret == []
+
+    def test_check_and_normalize_axes_axis_int(self):
+        """
+        Test the method check_and_normalize_axes. Specifically see if 
+        the method returns an array with the axis value as an int as the only value.
+        This test covers the branch on line 549. As seen in the branch, returns
+        the axis as a list with the axis value as the only element.
+        """
+
+        x = np.zeros((1, 1, 1, 1)) 
+        axis = 1
+        ret = check_and_normalize_axes(x, axis)
+        assert ret == [1]
+
+    def test_check_and_normalize_axes_axis_ndarray(self):
+        """
+        Test the method check_and_normalize_axes. Specifically see if 
+        the method returns an array with the axis values integers.
+        This test covers the branch on line 551. As seen in the branch, returns
+        the axis as a list with each element converted to an int.
+        """
+
+        x = np.zeros((1, 1, 1, 1)) 
+        axis = np.array([1.4, 2.4])
+        axis2 = np.array([1.6, 2.6])
+        ret = check_and_normalize_axes(x, axis)
+        ret2 = check_and_normalize_axes(x, axis2)
+        assert ret == [1, 2]
+        assert ret2 == [1, 2]
+
+    def test_check_and_normalize_axes_raise_typeerror(self):
+        """
+        Test the method check_and_normalize_axes. Specifically see if 
+        the method raises a TypeError when the axis has an invalid input type.
+        This test covers the branch on line 567. As seen in the branch, raises 
+        a TypeError if the axis is not an integer, tuple, list of integers or a TensorVariable.
+        """
+
+        x = np.zeros((1, 1, 1, 1)) 
+        axis = "inv"
+        with pytest.raises(TypeError, match="Axis must be an integer, tuple, list of integers or a TensorVariable. Got"):
+            check_and_normalize_axes(x, axis)

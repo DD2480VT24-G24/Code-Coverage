@@ -2,13 +2,20 @@ import logging
 import sys
 from io import StringIO
 
+import sys, os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
+
 import numpy as np
 import pytest
+import unittest
 from numpy.testing import assert_array_equal
 
 import pytensor
 import pytensor.scalar as scal
 import pytensor.tensor.basic as ptb
+import pytensor.tensor as pt
+from pytensor.tensor.type import scalar
 from pytensor import function
 from pytensor.compile import DeepCopyOp, shared
 from pytensor.compile.io import In
@@ -19,8 +26,10 @@ from pytensor.printing import pprint
 from pytensor.scalar.basic import as_scalar
 from pytensor.tensor import get_vector_length, vectorize
 from pytensor.tensor.blockwise import Blockwise
+from pytensor.tensor import Constant
 from pytensor.tensor.elemwise import DimShuffle
 from pytensor.tensor.math import exp, isinf
+from pytensor.graph.type import Type
 from pytensor.tensor.math import sum as pt_sum
 from pytensor.tensor.subtensor import (
     AdvancedIncSubtensor,
@@ -104,11 +113,91 @@ def test_as_index_literal():
     assert res is np.newaxis
 
 
-class TestGetCanonicalFormSlice:
+class TInt32(Type):
+    def filter(self, data):
+        return int(data)
+
+
+int32 = TInt32()
+
+
+class TestGetCanonicalFormSlice(unittest.TestCase):
+    """
+    Original Coverage Report: 0.708333%
+    Branches not covered:
+    {
+        'branch_2': False, 'branch_5': False, 'branch_6': False,
+        'branch_10': False, 'branch_11': False, 'branch_13': False,
+        'branch_16': False
+    }
+
+    New Coverage Report: 0.916666%
+    Branches not covered:
+    {
+        'branch_13': False, 'branch_16': False
+    }
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.coverage = {f"branch_{i}": False for i in range(24)}
+
+    @classmethod
+    def tearDownClass(cls):
+        print(sum([v for v in cls.coverage.values()]) / len(cls.coverage))
+        print("Not covered branches:", {k: v for k, v in cls.coverage.items() if not v})
+
+    def test_handle_not_scalar_constant_error(self):
+        # Create a symbolic variable that cannot be directly converted to an index literal.
+        theslice = scalar('a', dtype='int32')  # This will be treated as a non-constant variable.
+        length = as_scalar(10)  # Use a scalar for length.
+
+        # Call the function, expecting it to handle NotScalarConstantError internally.
+        result, flag = get_canonical_form_slice(theslice, length, coverage=self.coverage)
+
+        # Assertions to check the result is valid despite the error.
+        assert isinstance(result, pytensor.tensor.variable.TensorVariable)  # Or any specific check relevant to your case.
+        assert flag == 1  # The flag should be 1 as per the function's contract.
+
+    def test_slice_constant_conditions(self):
+        start_constant = Constant(int32, 1, name='start')
+        stop_constant = Constant(int32, 5, name='stop')
+        step_constant = Constant(int32, 2, name='step')
+        length_constant = Constant(int32, 10, name='length')
+
+        theslice = slice(start_constant, stop_constant, step_constant)
+
+        result_slice, reverse_flag = get_canonical_form_slice(theslice, length_constant, coverage=self.coverage)
+
+        assert result_slice.start == 1
+        assert result_slice.stop == 5
+        assert result_slice.step == 2
+        assert reverse_flag == 1
+
+    def test_full_slice_with_step_one(self):
+        length_constant = Constant(int32, 10, name='length')
+        theslice = slice(None, None, 1)  # Equivalent to `:` or `:length:1`
+        result_slice, reverse_flag = get_canonical_form_slice(theslice, length_constant, coverage=self.coverage)
+
+        assert result_slice.start == 0
+        assert result_slice.stop == length_constant.data
+        assert result_slice.step == 1
+        assert reverse_flag == 1
+
+    def test_slice_with_positive_stop_less_than_length(self):
+        length_constant = Constant(int32, 10, name='length')
+        stop_constant = Constant(int32, 5, name='length')
+        theslice = slice(None, stop_constant, 1)  # Equivalent to `:stop_value:1`
+        result_slice, reverse_flag = get_canonical_form_slice(theslice, length_constant, coverage=self.coverage)
+
+        assert result_slice.start == 0
+        assert result_slice.step == 1
+        assert reverse_flag == 1
+
     def test_scalar_constant(self):
         a = as_scalar(0)
         length = lscalar()
-        res = get_canonical_form_slice(a, length)
+        res = get_canonical_form_slice(a, length, coverage=self.coverage)
         assert res[0].owner.op == ptb.switch
         assert res[1] == 1
 
@@ -117,7 +206,7 @@ class TestGetCanonicalFormSlice:
         stop = iscalar("e")
         step = iscalar("s")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(start, stop, step), length)
+        cnf = get_canonical_form_slice(slice(start, stop, step), length, coverage=self.coverage)
         f = pytensor.function(
             [start, stop, step, length],
             [
@@ -143,7 +232,7 @@ class TestGetCanonicalFormSlice:
         stop = iscalar("e")
         step = iscalar("s")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(None, stop, step), length)
+        cnf = get_canonical_form_slice(slice(None, stop, step), length, coverage=self.coverage)
         f = pytensor.function(
             [stop, step, length],
             [
@@ -168,7 +257,7 @@ class TestGetCanonicalFormSlice:
         start = iscalar("b")
         step = iscalar("s")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(start, None, step), length)
+        cnf = get_canonical_form_slice(slice(start, None, step), length, coverage=self.coverage)
         f = pytensor.function(
             [start, step, length],
             [
@@ -193,7 +282,7 @@ class TestGetCanonicalFormSlice:
         start = iscalar("b")
         stop = iscalar("e")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(start, stop, None), length)
+        cnf = get_canonical_form_slice(slice(start, stop, None), length, coverage=self.coverage)
         f = pytensor.function(
             [start, stop, length],
             [
@@ -217,7 +306,7 @@ class TestGetCanonicalFormSlice:
     def test_start_stop_None(self):
         step = iscalar("s")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(None, None, step), length)
+        cnf = get_canonical_form_slice(slice(None, None, step), length, coverage=self.coverage)
         f = pytensor.function(
             [step, length],
             [
@@ -240,7 +329,7 @@ class TestGetCanonicalFormSlice:
     def test_stop_step_None(self):
         start = iscalar("b")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(start, None, None), length)
+        cnf = get_canonical_form_slice(slice(start, None, None), length, coverage=self.coverage)
         f = pytensor.function(
             [start, length],
             [
@@ -263,7 +352,7 @@ class TestGetCanonicalFormSlice:
     def test_start_step_None(self):
         stop = iscalar("e")
         length = iscalar("l")
-        cnf = get_canonical_form_slice(slice(None, stop, None), length)
+        cnf = get_canonical_form_slice(slice(None, stop, None), length, coverage=self.coverage)
         f = pytensor.function(
             [stop, length],
             [
@@ -2683,19 +2772,57 @@ def test_pprint_IncSubtensor(indices, set_instead_of_inc, exp_res):
 def test_index_vars_to_types():
     x = ptb.as_tensor_variable(np.array([True, False]))
 
+    # Test
+    # isinstance(entry, (np.ndarray, Variable))
+    # and hasattr(entry, "dtype")
+    # and entry.dtype == "bool"
     with pytest.raises(AdvancedIndexingError):
         index_vars_to_types(x)
-
+    
+    # Test (New)
+    # isinstance(entry, Variable) and (
+    # entry.type in invalid_scal_types or entry.type in invalid_tensor_types
+    x = ptb.as_tensor_variable(1.4)
     with pytest.raises(TypeError):
-        index_vars_to_types(1)
-
-    res = index_vars_to_types(iscalar)
-    assert isinstance(res, scal.ScalarType)
-
+        index_vars_to_types(x)
+    
+    # Test
+    # isinstance(entry, Variable) and entry.type in scal_types
     x = scal.constant(1, dtype=np.uint8)
     assert isinstance(x.type, scal.ScalarType)
     res = index_vars_to_types(x)
-    assert res == x.type
+    assert res == x.type 
+
+    # Test (New)
+    # isinstance(entry, Variable)
+    # and entry.type in tensor_types
+    # and all(entry.type.broadcastable) 
+    y = pt.tensor(dtype='int32', shape=(), name='t1')
+    res = index_vars_to_types(y)
+    z = pt.scalar('t2', dtype='int32')
+    z = pt.iscalar('t2')    
+    assert str(res) == str(z.type.dtype)
+
+    # Test
+    # isinstance(entry, Type) and entry in tensor_types and all(entry.broadcastable)
+    res = index_vars_to_types(iscalar)
+    assert isinstance(res, scal.ScalarType)
+    
+    # Test (New)
+    # slice_ok and isinstance(entry, slice)
+    res = index_vars_to_types(slice(None, None))
+    assert isinstance(res, slice)
+    assert res == slice(None, None)
+
+    # Test (New)
+    # slice_ok and isinstance(entry, slice) but where C is None
+    res = index_vars_to_types(slice(None, None, None))
+    assert isinstance(res, slice)
+    assert res == slice(None, None, None)
+    
+    with pytest.raises(TypeError):
+        index_vars_to_types(1)
+
 
 
 @pytest.mark.parametrize(
@@ -2751,3 +2878,7 @@ def test_vectorize_subtensor_without_batch_indices():
         vectorize_pt(x_test, start_test),
         vectorize_np(x_test, start_test),
     )
+
+
+if __name__ in "__main__":
+    unittest.main()
