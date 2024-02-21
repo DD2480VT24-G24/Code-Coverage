@@ -1,3 +1,5 @@
+import unittest
+
 import numpy as np
 import pytest
 
@@ -874,6 +876,20 @@ class TestScanMerge:
         # Run it so DebugMode can detect optimization problems.
         f(x_val, y_val)
 
+
+class TestBelongsToSet(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.coverage = [False] * 8
+
+    @classmethod
+    def tearDownClass(cls):
+        values = (
+            cls.coverage if isinstance(cls.coverage, list) else cls.coverage.values()
+        )
+        print(f"{sum(values) / len(values) * 100:.2f}%")
+        print(cls.coverage)
+
     def test_belongs_to_set(self):
         """
         Test the method belongs_to of this class. Specifically see if it
@@ -896,12 +912,18 @@ class TestScanMerge:
         scan_node2 = y2.owner.inputs[0].owner
         assert isinstance(scan_node2.op, Scan)
         opt_obj = ScanMerge()
-        assert not opt_obj.belongs_to_set(scan_node1, [scan_node2])
-        assert not opt_obj.belongs_to_set(scan_node2, [scan_node1])
+        assert not opt_obj.belongs_to_set(
+            scan_node1, [scan_node2], coverage=self.coverage
+        )
+        assert not opt_obj.belongs_to_set(
+            scan_node2, [scan_node1], coverage=self.coverage
+        )
+
+        # New
 
     def test_belongs_to_set_different_n_steps(self):
         """
-        Test the method belongs_to_scan of this class. Specifically see if 
+        Test the method belongs_to_scan of this class. Specifically see if
         the method returns false when the one `Scan` node and the nodes in the set has different n_step.
 
         This is done by calling the scan method with different n_step values.
@@ -919,12 +941,18 @@ class TestScanMerge:
         assert isinstance(scan_node2.op, Scan)
 
         opt_obj = ScanMerge()
-        assert not opt_obj.belongs_to_set(scan_node1, [scan_node2])
-        assert not opt_obj.belongs_to_set(scan_node2, [scan_node1])
+        assert not opt_obj.belongs_to_set(
+            scan_node1, [scan_node2], coverage=self.coverage
+        )
+        assert not opt_obj.belongs_to_set(
+            scan_node2, [scan_node1], coverage=self.coverage
+        )
+
+        # New
 
     def test_belongs_to_set_check_node_in_one_item_set(self):
         """
-        Test the method belongs_to_scan of this class. Specifically see if 
+        Test the method belongs_to_scan of this class. Specifically see if
         the method returns false when one `Scan` node is sent into the method and the set
         only contains of this `Scan` node.
 
@@ -940,13 +968,17 @@ class TestScanMerge:
         scan_node1 = y1.owner.inputs[0].owner
         scan_node2 = y1.owner.inputs[0].owner
         assert isinstance(scan_node1.op, Scan)
-        
+
         opt_obj = ScanMerge()
-        assert not opt_obj.belongs_to_set(scan_node1, [scan_node2])
+        assert not opt_obj.belongs_to_set(
+            scan_node1, [scan_node2], coverage=self.coverage
+        )
+
+        # New
 
     def test_belongs_to_set_check_as_while(self):
         """
-        Test the method belongs_to_scan of this class. Specifically see if 
+        Test the method belongs_to_scan of this class. Specifically see if
         the method returns True when as_while is false.
 
         This is done by making two different `scan` nodes (neither of needs to use a while)
@@ -955,7 +987,7 @@ class TestScanMerge:
         """
         inps = vector()
         state = scalar()
-        
+
         y1, _ = scan(lambda x, y: x * y, sequences=inps, outputs_info=state, n_steps=5)
         y2, _ = scan(lambda x, y: x + y, sequences=inps, outputs_info=state, n_steps=5)
 
@@ -963,11 +995,13 @@ class TestScanMerge:
         scan_node2 = y2.owner.inputs[0].owner
 
         opt_obj = ScanMerge()
-        assert opt_obj.belongs_to_set(scan_node1, [scan_node2])
+        assert opt_obj.belongs_to_set(scan_node1, [scan_node2], coverage=self.coverage)
+
+        # New
 
     def test_belongs_to_set_check_identical_while_cond(self):
         """
-        Test the method belongs_to_scan of this class. Specifically see if 
+        Test the method belongs_to_scan of this class. Specifically see if
         the method returns False when the while conditions isn't equal.
 
         This is done by making two different `scan` nodes, with different while conditions.
@@ -976,17 +1010,28 @@ class TestScanMerge:
         """
         inps = vector()
         state = scalar()
-        
-        #make one while cond to [gt: 0] and one [lt: 0]
-        y1, _ = scan(lambda x, y: (x * y, until(x > 0)), sequences=inps, outputs_info=state, n_steps=5)
-        y2, _ = scan(lambda x, y: (x + y, until(x < 0)), sequences=inps, outputs_info=state, n_steps=5)
+
+        # make one while cond to [gt: 0] and one [lt: 0]
+        y1, _ = scan(
+            lambda x, y: (x * y, until(x > 0)),
+            sequences=inps,
+            outputs_info=state,
+            n_steps=5,
+        )
+        y2, _ = scan(
+            lambda x, y: (x + y, until(x < 0)),
+            sequences=inps,
+            outputs_info=state,
+            n_steps=5,
+        )
 
         scan_node1 = y1.owner.inputs[0].owner
         scan_node2 = y2.owner.inputs[0].owner
 
         opt_obj = ScanMerge()
-        assert not opt_obj.belongs_to_set(scan_node1, [scan_node2])
-
+        assert not opt_obj.belongs_to_set(
+            scan_node1, [scan_node2], coverage=self.coverage
+        )
 
     @config.change_flags(cxx="")  # Just for faster compilation
     def test_while_scan(self):
