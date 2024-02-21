@@ -805,6 +805,13 @@ def vars_to_slice(a,b,c):
         else:
             slice_c = None
         return slice(slice_a, slice_b, slice_c)
+def check_index_type_and_slice_for_subtensor(entry):
+    if (
+            isinstance(entry, (np.ndarray, Variable))
+            and hasattr(entry, "dtype")
+            and entry.dtype == "bool"
+        ):
+            raise AdvancedIndexingError("Invalid index type or slice for Subtensor")
 
 def index_vars_to_types(entry, slice_ok=True):
     r"""Change references to `Variable`s into references to `Type`s.
@@ -817,12 +824,7 @@ def index_vars_to_types(entry, slice_ok=True):
     when would that happen?
 
     """
-    if (
-        isinstance(entry, (np.ndarray, Variable))
-        and hasattr(entry, "dtype")
-        and entry.dtype == "bool"
-    ):
-        raise AdvancedIndexingError("Invalid index type or slice for Subtensor")
+    check_index_type_and_slice_for_subtensor(entry)
     
     if isinstance(entry, Variable):
         if entry.type in invalid_scal_types + invalid_tensor_types:
