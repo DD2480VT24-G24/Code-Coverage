@@ -11,6 +11,10 @@
 
 ## Statements of contribution
 - Adam
+    - Collaborated with Andreas & Casper to write the coverage tool
+    - Analyzed CC for the function `index_vars_to_types`
+    - Implemented CC improvement/reduction for the function `index_vars_to_types`
+    - Implemented tests to increase branch coverage for the function `index_vars_to_types`
 - Andreas
 - Casper
 - Martin:
