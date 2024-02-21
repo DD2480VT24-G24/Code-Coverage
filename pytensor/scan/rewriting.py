@@ -2002,11 +2002,10 @@ class ScanMerge(GraphRewriter):
         op = node.op
         rep_node = set_nodes[0]
         rep_op = rep_node.op
-        if self.firstCheck(op, rep_op):
-            coverage[0] = True
+        if self.first_check(op, rep_op):
             return False
 
-        nsteps, rep_nsteps = self.parseSteps(node, rep_node)
+        nsteps, rep_nsteps = self.parse_steps(node, rep_node)
 
         if nsteps != rep_nsteps:
             coverage[1] = True
