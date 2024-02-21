@@ -917,8 +917,6 @@ class TestScanMerge(unittest.TestCase):
             scan_node2, [scan_node1], coverage=self.coverage
         )
 
-        # New
-
     def test_belongs_to_set_different_n_steps(self):
         """
         Test the method belongs_to_scan of this class. Specifically see if
@@ -1030,6 +1028,8 @@ class TestScanMerge(unittest.TestCase):
         assert not opt_obj.belongs_to_set(
             scan_node1, [scan_node2], coverage=self.coverage
         )
+
+        # New
 
     @config.change_flags(cxx="")  # Just for faster compilation
     def test_while_scan(self):
