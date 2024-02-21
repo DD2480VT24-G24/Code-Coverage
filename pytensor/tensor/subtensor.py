@@ -198,13 +198,13 @@ def handle_non_slice_case(theslice, length, coverage):
         A tuple containing the canonical form of the input (if possible) and a flag indicating
         whether the result needs to be reversed (always 1 in this case since it's a single index).
     """
-    from pytensor.tensor import switch, lt
-    coverage["branch_0"] = True
+    from pytensor.tensor import lt, switch
+
     try:
-        coverage["branch_1"] = True
+        coverage[4] = True
         value = as_index_literal(theslice)
     except NotScalarConstantError:
-        coverage["branch_2"] = True
+        coverage[5] = True
         value = theslice
 
     # Adjust value if it's negative, adding the length to wrap around
@@ -230,11 +230,11 @@ def analyze(x, coverage):
     """
 
     try:
-        coverage["branch_3"] = True
+        coverage[6] = True
         x_constant = as_index_literal(x)
         is_constant = True
     except NotScalarConstantError:
-        coverage["branch_4"] = True
+        coverage[7] = True
         x_constant = x
         is_constant = False
     return x_constant, is_constant
@@ -258,15 +258,20 @@ def preprocess_slice_components(theslice, length, coverage):
     step, is_step_constant = analyze(theslice.step, coverage)
     length, is_length_constant = analyze(length, coverage)
 
-    if (is_start_constant and is_stop_constant and is_step_constant and is_length_constant):
-        coverage["branch_5"] = True
+    if (
+        is_start_constant
+        and is_stop_constant
+        and is_step_constant
+        and is_length_constant
+    ):
+        coverage[8] = True
         _start, _stop, _step = slice(start, stop, step).indices(length)
         if _start <= _stop and _step >= 1:
-            coverage["branch_6"] = True
+            coverage[9] = True
             return {"slice": slice(_start, _stop, _step), "flag": 1}
 
     if step is None:
-        coverage["branch_7"] = True
+        coverage[10] = True
         step = 1
         is_step_constant = True
 
@@ -298,14 +303,14 @@ def handle_zero_start(is_stop_length, stop, length, is_stop_constant, coverage):
     """
     from pytensor.tensor import lt, switch
 
-    coverage["branch_9"] = True
+    coverage[11] = True
     # 0:stop:1
     if is_stop_length:
-        coverage["branch_10"] = True
+        coverage[12] = True
         # Full slice.
         return slice(0, length, 1), 1
     if is_stop_constant and stop >= 0:
-        coverage["branch_11"] = True
+        coverage[13] = True
         return (slice(0, switch(lt(stop, length), stop, length), 1), 1)
     stop_plus_len = stop + length
     stop = switch(
@@ -340,10 +345,10 @@ def handle_start_length_case(start, length, is_start_constant, coverage):
 
     from pytensor.tensor import lt, switch
 
-    coverage["branch_12"] = True
+    coverage[13] = True
     # start:length:1
     if is_start_constant and start >= 0:
-        coverage["branch_13"] = True
+        coverage[14] = True
         return slice(switch(lt(start, length), start, length), length, 1), 1
     start_plus_len = start + length
     start = switch(
@@ -362,7 +367,15 @@ def handle_start_length_case(start, length, is_start_constant, coverage):
     return slice(start, length, 1), 1
 
 
-def handle_step_one(start, stop, length, is_start_constant, is_stop_constant, is_length_constant, coverage):
+def handle_step_one(
+    start,
+    stop,
+    length,
+    is_start_constant,
+    is_stop_constant,
+    is_length_constant,
+    coverage,
+):
     """
     Handle the case where the step is one in a slice operation.
 
@@ -378,8 +391,9 @@ def handle_step_one(start, stop, length, is_start_constant, is_stop_constant, is
     Returns:
         If the slice can be simplified to a step one slice, returns a tuple containing the simplified slice object and a flag indicating success. Otherwise, returns False, False.
     """
-    coverage["branch_8"] = True
-    is_start_0 = (start is None
+    coverage[15] = True
+    is_start_0 = (
+        start is None
         or start == 0
         or (
             is_start_constant
@@ -394,7 +408,9 @@ def handle_step_one(start, stop, length, is_start_constant, is_stop_constant, is
         or (is_stop_constant and is_length_constant and stop >= length)
     )
     if is_start_0:
-        return handle_zero_start(is_stop_length, stop, length, is_stop_constant, coverage)
+        return handle_zero_start(
+            is_stop_length, stop, length, is_stop_constant, coverage
+        )
 
     elif is_stop_length:
         return handle_start_length_case(start, length, is_start_constant, coverage)
@@ -421,11 +437,11 @@ def step_manager(step, is_step_constant, coverage):
     from pytensor.tensor import lt, sign, switch
 
     if is_step_constant:
-        coverage["branch_14"] = True
+        coverage[16] = True
         # When we know the sign of `step`, the graph can be made simpler.
         assert step != 0
         if step > 0:
-            coverage["branch_15"] = True
+            coverage[17] = True
 
             def switch_neg_step(a, b):
                 return b
@@ -433,7 +449,7 @@ def step_manager(step, is_step_constant, coverage):
             abs_step = step
             sgn_step = 1
         else:
-            coverage["branch_16"] = True
+            coverage[18] = True
 
             def switch_neg_step(a, b):
                 return a
@@ -441,7 +457,7 @@ def step_manager(step, is_step_constant, coverage):
             abs_step = -step
             sgn_step = -1
     else:
-        coverage["branch_17"] = True
+        coverage[19] = True
         is_step_neg = lt(step, 0)
 
         def switch_neg_step(a, b):
@@ -469,24 +485,25 @@ def process_start_stop(start, stop, length, switch_neg_step, coverage):
     """
 
     from pytensor.tensor import ge, lt, switch
+
     defstart = switch_neg_step(length - 1, 0)
     defstop = switch_neg_step(-1, length)
     if start is None:
-        coverage["branch_18"] = True
+        coverage[20] = True
         start = defstart
     else:
-        coverage["branch_19"] = True
+        coverage[21] = True
         start = switch(lt(start, 0), start + length, start)
         start = switch(lt(start, 0), switch_neg_step(-1, 0), start)
         start = switch(ge(start, length), switch_neg_step(length - 1, length), start)
     if stop is None or stop == sys.maxsize:
-        coverage["branch_20"] = True
+        coverage[22] = True
         # The special "maxsize" case is probably not needed here,
         # as slices containing maxsize are not generated by
         # __getslice__ anymore.
         stop = defstop
     else:
-        coverage["branch_21"] = True
+        coverage[23] = True
         stop = switch(lt(stop, 0), stop + length, stop)
         stop = switch(lt(stop, 0), -1, stop)
         stop = switch(ge(stop, length), length, stop)
@@ -547,16 +564,16 @@ def handle_generic_case(start, stop, step, length, is_step_constant, coverage):
 
     nw_step = abs_step
     if step != 1:
-        coverage["branch_22"] = True
+        coverage[24] = True
         reverse = sgn_step
         return slice(nw_start, nw_stop, nw_step), reverse
     else:
-        coverage["branch_23"] = True
+        coverage[25] = True
         return slice(nw_start, nw_stop, nw_step), 1
 
 
 def get_canonical_form_slice(
-    theslice: Union[slice, Variable], length: Variable, coverage={f"branch_{i}": False for i in range(24)}
+    theslice: Union[slice, Variable], length: Variable, coverage={}
 ) -> tuple[Variable, int]:
     """Convert slices to canonical form.
 
@@ -569,23 +586,45 @@ def get_canonical_form_slice(
 
     """
     if not isinstance(theslice, slice):
+        coverage[0] = True
         return handle_non_slice_case(theslice, length, coverage)
 
     data = preprocess_slice_components(theslice, length, coverage)
 
     if data.get("slice"):
+        coverage[1] = True
         return data["slice"], data["flag"]
 
-    start, stop, step, length = data["start"], data["stop"], data["step"], data["length"]
-    is_start_constant, is_stop_constant, is_step_constant, is_length_constant = data["is_start_constant"], data["is_stop_constant"], data["is_step_constant"], data["is_length_constant"]
+    start, stop, step, length = (
+        data["start"],
+        data["stop"],
+        data["step"],
+        data["length"],
+    )
+    is_start_constant, is_stop_constant, is_step_constant, is_length_constant = (
+        data["is_start_constant"],
+        data["is_stop_constant"],
+        data["is_step_constant"],
+        data["is_length_constant"],
+    )
 
     # First handle the easier and common case where `step` is 1 and
     # either `start` or `stop` is a range boundary. More specializations
     # could be added later. This makes the resulting graph smaller than
     # in the generic case below.
     if step == 1:
-        slice_data, flag = handle_step_one(start, stop, length, is_start_constant, is_stop_constant, is_length_constant, coverage)
+        coverage[2] = True
+        slice_data, flag = handle_step_one(
+            start,
+            stop,
+            length,
+            is_start_constant,
+            is_stop_constant,
+            is_length_constant,
+            coverage,
+        )
         if slice_data:
+            coverage[3] = True
             return slice_data, flag
 
     # This is the generic case.
@@ -788,27 +827,36 @@ def get_slice_elements(idxs: list, cond: Callable) -> list:
 
     return ret
 
-def vars_to_slice(a,b,c):
-        if a is not None:
-            slice_a = index_vars_to_types(a, False)
-        else:
-            slice_a = None
 
-        if b is not None and b != sys.maxsize:
-            # The special "maxsize" case is probably not needed here,
-            # as slices containing maxsize are not generated by
-            # __getslice__ anymore.
-            slice_b = index_vars_to_types(b, False)
-        else:
-            slice_b = None
+def vars_to_slice(a, b, c, coverage):
+    if a is not None:
+        coverage[11] = True
+        slice_a = index_vars_to_types(a, False)
+    else:
+        coverage[12] = True
+        slice_a = None
 
-        if c is not None:
-            slice_c = index_vars_to_types(c, False)
-        else:
-            slice_c = None
+    if b is not None and b != sys.maxsize:
+        # The special "maxsize" case is probably not needed here,
+        # as slices containing maxsize are not generated by
+        # __getslice__ anymore.
+        coverage[13] = True
+        slice_b = index_vars_to_types(b, False)
+    else:
+        coverage[14] = True
+        slice_b = None
 
-        return slice(slice_a, slice_b, slice_c)
-def index_vars_to_types(entry, slice_ok=True):
+    if c is not None:
+        coverage[15] = True
+        slice_c = index_vars_to_types(c, False)
+    else:
+        coverage[16] = True
+        slice_c = None
+
+    return slice(slice_a, slice_b, slice_c)
+
+
+def index_vars_to_types(entry, slice_ok=True, coverage={}):
     r"""Change references to `Variable`s into references to `Type`s.
 
     The `Subtensor.idx_list` field is unique to each `Subtensor` instance.  It
@@ -824,26 +872,37 @@ def index_vars_to_types(entry, slice_ok=True):
         and hasattr(entry, "dtype")
         and entry.dtype == "bool"
     ):
+        coverage[0] = True
         raise AdvancedIndexingError("Invalid index type or slice for Subtensor")
-    
+
     if isinstance(entry, Variable):
+        coverage[1] = True
         if entry.type in invalid_scal_types + invalid_tensor_types:
+            coverage[2] = True
             raise TypeError("Expected an integer")
         elif entry.type in scal_types:
+            coverage[3] = True
             return entry.type
-        elif (entry.type in tensor_types and all(entry.type.broadcastable)):
+        elif entry.type in tensor_types and all(entry.type.broadcastable):
+            coverage[4] = True
             return ps.get_scalar_type(entry.type.dtype)
     elif isinstance(entry, Type):
+        coverage[5] = True
         if entry in scal_types:
+            coverage[6] = True
             return entry
         if entry in tensor_types and all(entry.broadcastable):
+            coverage[7] = True
             return ps.get_scalar_type(entry.dtype)
     elif slice_ok and isinstance(entry, slice):
-        return vars_to_slice(entry.start,entry.stop,entry.step)
+        coverage[8] = True
+        return vars_to_slice(entry.start, entry.stop, entry.step, coverage)
     elif isinstance(entry, (int, np.integer)):
+        coverage[9] = True
         raise TypeError()
     else:
-        raise AdvancedIndexingError("Invalid index type or slice for Subtensor") 
+        coverage[10] = True
+        raise AdvancedIndexingError("Invalid index type or slice for Subtensor")
 
 
 def get_constant_idx(
