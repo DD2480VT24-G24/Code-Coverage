@@ -1,6 +1,7 @@
 import builtins
 import operator
 import pickle
+import unittest
 from copy import copy
 from functools import reduce
 from itertools import product
@@ -1911,26 +1912,55 @@ class TestDivimpl:
         assert np.allclose(function([i, c], c / i)(5, complex(5, 3)), ((5 + 3j) / 5.0))
 
 
-class TestMean:
+class TestMean(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.coverage = {i: False for i in range(16)}
+
+    @classmethod
+    def tearDownClass(cls):
+        print(f"{sum(cls.coverage.values()) / len(cls.coverage) * 100:.2f}%")
+        print(cls.coverage)
+
     def test_mean_single_element(self):
-        res = mean(np.zeros(1))
+        res = mean(np.zeros(1), coverage=self.coverage)
         assert res.eval() == 0.0
 
     def test_mean_f16(self):
         x = vector(dtype="float16")
-        y = x.mean()
+        y = mean(x, coverage=self.coverage)
         f = function([x], y)
         utt.assert_allclose(f(np.ones((100000,), dtype="float16")), 1.0)
 
     def test_basic(self):
         x = vector()
-        f = function([x], mean(x))
+        f = function([x], mean(x, coverage=self.coverage))
         data = random(50)
         assert np.allclose(f(data), np.mean(data))
 
     def test_list(self):
         ll = [shared(0.0), shared(2.0)]
-        assert mean(ll).eval() == 1
+        assert mean(ll, coverage=self.coverage).eval() == 1
+
+    def test_matrix_mean_default_axis(self):
+        res = mean(np.linspace(1, 9, 9).reshape(3, 3), coverage=self.coverage)
+        assert res.eval() == 5.0
+
+    def test_matrix_mean_off_axis_int(self):
+        res = mean(np.linspace(1, 9, 9).reshape(3, 3), axis=1, coverage=self.coverage)
+        assert np.allclose(res.eval(), [2.0, 5.0, 8.0])
+
+    def test_matrix_mean_off_axis_empty_ndarray(self):
+        res = mean(
+            np.linspace(1, 9, 9).reshape(3, 3), axis=np.array(1), coverage=self.coverage
+        )
+        assert np.allclose(res.eval(), [2.0, 5.0, 8.0])
+
+    def test_matrix_mean_off_axis_index_tuple(self):
+        res = mean(
+            np.linspace(1, 9, 9).reshape(3, 3), axis=(0, 1), coverage=self.coverage
+        )
+        assert res.eval() == 5.0
 
 
 def test_dot_numpy_inputs():
