@@ -9,3 +9,14 @@
     - Excluding raise as exit point #decisions = 19, #exit points = 1 => M = 20 (Same as Lizard tool)
     - Including raise as exit point #decisions = 19, #exit points = 3 => M = 18
 
+## Statements of contribution
+- Adam
+- Andreas
+- Casper
+- Martin:
+    - Collaborated with Victor to create the project report
+    - Analyzed CC for the function `check_and_normalize_axes`
+    - Implemented CC improvement/reduction for the function `check_and_normalize_axes`
+    - Implemented tests to increase branch coverage for the function `check_and_normalize_axes`
+     
+- Victor
