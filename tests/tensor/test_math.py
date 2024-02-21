@@ -44,6 +44,7 @@ from pytensor.tensor.math import (
     Prod,
     ProdWithoutZeros,
     Sum,
+    check_and_normalize_axes,
     _allclose,
     _dot,
     abs,
@@ -267,7 +268,7 @@ def test_maximum_minimum_grad():
 
         f = function([x, y], g)
         assert np.allclose(f([1], [1]), [[1], [0]])
-
+    
 
 TestMinimumBroadcast = makeBroadcastTester(
     op=minimum,
@@ -3641,3 +3642,60 @@ class TestPolyGamma:
         n = scalar(dtype="int64")
         with pytest.raises(NullTypeGradError):
             grad(polygamma(n, 0.5), wrt=n)
+
+class TestCheckAndNormalizeAxes:
+
+    def test_check_and_normalize_axes_axis_none(self):
+        """
+        Test the method check_and_normalize_axes. Specifically see if 
+        the method returns an empty array when input `axis` is None.
+        This test covers the branch on line 543. As seen in the branch, it returns 
+        an empty list.
+        """
+
+        x = np.zeros((1, 1, 1, 1)) 
+        axis = None
+        ret = check_and_normalize_axes(x, axis)
+        assert ret == []
+
+    def test_check_and_normalize_axes_axis_int(self):
+        """
+        Test the method check_and_normalize_axes. Specifically see if 
+        the method returns an array with the axis value as an int as the only value.
+        This test covers the branch on line 549. As seen in the branch, returns
+        the axis as a list with the axis value as the only element.
+        """
+
+        x = np.zeros((1, 1, 1, 1)) 
+        axis = 1
+        ret = check_and_normalize_axes(x, axis)
+        assert ret == [1]
+
+    def test_check_and_normalize_axes_axis_ndarray(self):
+        """
+        Test the method check_and_normalize_axes. Specifically see if 
+        the method returns an array with the axis values integers.
+        This test covers the branch on line 551. As seen in the branch, returns
+        the axis as a list with each element converted to an int.
+        """
+
+        x = np.zeros((1, 1, 1, 1)) 
+        axis = np.array([1.4, 2.4])
+        axis2 = np.array([1.6, 2.6])
+        ret = check_and_normalize_axes(x, axis)
+        ret2 = check_and_normalize_axes(x, axis2)
+        assert ret == [1, 2]
+        assert ret2 == [1, 2]
+
+    def test_check_and_normalize_axes_raise_typeerror(self):
+        """
+        Test the method check_and_normalize_axes. Specifically see if 
+        the method raises a TypeError when the axis has an invalid input type.
+        This test covers the branch on line 567. As seen in the branch, raises 
+        a TypeError if the axis is not an integer, tuple, list of integers or a TensorVariable.
+        """
+
+        x = np.zeros((1, 1, 1, 1)) 
+        axis = "inv"
+        with pytest.raises(TypeError, match="Axis must be an integer, tuple, list of integers or a TensorVariable. Got"):
+            check_and_normalize_axes(x, axis)

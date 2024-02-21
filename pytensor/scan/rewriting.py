@@ -1945,6 +1945,46 @@ class ScanMerge(GraphRewriter):
 
         return list(zip(outer_outs, new_outs))
 
+    def first_check(self, op, rep_op):
+        """
+        Helper function for the belongs_to_set method. The use of this method
+        is to reduce the cyclomatic complexity.
+        """
+        if(op.info.as_while != rep_op.info.as_while
+            or op.truncate_gradient != rep_op.truncate_gradient
+            or op.mode != rep_op.mode):
+            return True
+        else:
+            return False
+        
+    def parse_steps(self, node, rep_node):
+        """
+        Helper function for the belongs_to_set method. The use of this method
+        is to reduce the cyclomatic complexity.
+        """
+        nsteps = node.inputs[0]
+        try:
+            nsteps = int(get_underlying_scalar_constant_value(nsteps))
+        except NotScalarConstantError:
+            pass
+
+        rep_nsteps = rep_node.inputs[0]
+        try:
+            rep_nsteps = int(get_underlying_scalar_constant_value(rep_nsteps))
+        except NotScalarConstantError:
+            pass
+        return nsteps, rep_nsteps
+
+    def create_nominal_inputs(self, conds, rep_conds):
+        """
+        Helper function for the belongs_to_set method. The use of this method
+        is to reduce the cyclomatic complexity.
+        """
+        nominal_inputs = [a for a in ancestors(conds) if isinstance(a, NominalVariable)]
+        rep_nominal_inputs = [a for a in ancestors(rep_conds) if isinstance(a, NominalVariable)]
+
+        return nominal_inputs, rep_nominal_inputs
+
     def belongs_to_set(self, node, set_nodes):
         """
         This function checks if node `node` belongs to `set_nodes`, in the
@@ -1958,51 +1998,35 @@ class ScanMerge(GraphRewriter):
         op = node.op
         rep_node = set_nodes[0]
         rep_op = rep_node.op
-        if (
-            op.info.as_while != rep_op.info.as_while
-            or op.truncate_gradient != rep_op.truncate_gradient
-            or op.mode != rep_op.mode
-        ):
+        if (self.firstCheck(op, rep_op)):
             return False
 
-        nsteps = node.inputs[0]
-        try:
-            nsteps = int(get_underlying_scalar_constant_value(nsteps))
-        except NotScalarConstantError:
-            pass
-
-        rep_nsteps = rep_node.inputs[0]
-        try:
-            rep_nsteps = int(get_underlying_scalar_constant_value(rep_nsteps))
-        except NotScalarConstantError:
-            pass
+        nsteps, rep_nsteps = self.parseSteps(node, rep_node)
 
         if nsteps != rep_nsteps:
-            return False
+            return False #exit point
 
         # Check to see if it is an input of a different node
         for nd in set_nodes:
-            if apply_depends_on(node, nd) or apply_depends_on(nd, node):
-                return False
+            if apply_depends_on(node, nd) or apply_depends_on(nd, node): #2 decisions
+                return False # exit point
 
-        if not op.info.as_while:
-            return True
+        if not op.info.as_while: #1 decision
+            return True # exit point
 
         # We need to check the while conditions are identical
         conds = [op.inner_outputs[-1]]
         rep_conds = [rep_op.inner_outputs[-1]]
-        if not equal_computations(
+        if not equal_computations( #1 decision
             conds, rep_conds, op.inner_inputs, rep_op.inner_inputs
         ):
-            return False
+            return False # exit point
 
         # If they depend on inner inputs we need to check for equivalence on the respective outer inputs
-        nominal_inputs = [a for a in ancestors(conds) if isinstance(a, NominalVariable)]
+        nominal_inputs, rep_nominal_inputs = self.create_nominal_inputs(conds, rep_conds)
         if not nominal_inputs:
             return True
-        rep_nominal_inputs = [
-            a for a in ancestors(rep_conds) if isinstance(a, NominalVariable)
-        ]
+
 
         conds = []
         rep_conds = []
@@ -2012,13 +2036,14 @@ class ScanMerge(GraphRewriter):
         ]
         inner_inputs = op.inner_inputs
         rep_inner_inputs = rep_op.inner_inputs
-        for nominal_input, rep_nominal_input in zip(nominal_inputs, rep_nominal_inputs):
+        for nominal_input, rep_nominal_input in zip(nominal_inputs, rep_nominal_inputs): #1 decision
             conds.append(node.inputs[mapping[inner_inputs.index(nominal_input)]])
             rep_conds.append(
                 rep_node.inputs[rep_mapping[rep_inner_inputs.index(rep_nominal_input)]]
             )
 
-        return equal_computations(conds, rep_conds)
+        return equal_computations(conds, rep_conds) # exit point
+
 
     def apply(self, fgraph):
         # Collect all scan nodes ordered according to toposort
