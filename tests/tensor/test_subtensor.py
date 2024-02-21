@@ -140,14 +140,14 @@ class TestGetCanonicalFormSlice(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.coverage = [False] * 24
+        cls.coverage = [False] * 26
 
     @classmethod
     def tearDownClass(cls):
         values = (
             cls.coverage if isinstance(cls.coverage, list) else cls.coverage.values()
         )
-        print(f"Mean: {sum(values) / len(values) * 100:.2f}%")
+        print(f"GetCanonicalFormSlice: {sum(values) / len(values) * 100:.2f}%")
         print(cls.coverage)
 
     # New
