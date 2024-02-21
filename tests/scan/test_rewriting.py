@@ -797,7 +797,7 @@ class TestPushOutAddScan:
         utt.assert_allclose(output_opt, output_no_opt)
 
 
-class TestScanMerge:
+class TestScanMerge(unittest.TestCase):
     mode = get_default_mode().including("scan").excluding("scan_pushout_seqs_ops")
 
     @staticmethod
@@ -876,8 +876,6 @@ class TestScanMerge:
         # Run it so DebugMode can detect optimization problems.
         f(x_val, y_val)
 
-
-class TestBelongsToSet(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.coverage = [False] * 8
