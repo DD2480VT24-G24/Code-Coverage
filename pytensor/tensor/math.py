@@ -524,7 +524,8 @@ def makeKeepDims(x, y, axis):
             i += 1
     return DimShuffle(y.type.broadcastable, new_dims)(y)
 
-def normalize_axis_type(axis):
+
+def normalize_axis_type(axis, coverage):
     """
     Utility function utilized by `check_and_normalize_axes` to normalize the axis
 
@@ -536,34 +537,46 @@ def normalize_axis_type(axis):
     """
 
     if axis is None:
+        coverage[0] = True
         normalized_axis = []
     elif isinstance(axis, (int, np.integer)) or (
         isinstance(axis, np.ndarray) and axis.ndim == 0
-    ): # 3 Decision 
+    ):  # 3 Decision
+        coverage[1] = True
         normalized_axis = [int(axis)]
     elif isinstance(axis, (tuple, list, np.ndarray)):
-        normalized_axis = [int(i) for i in axis] 
+        coverage[2] = True
+        normalized_axis = [int(i) for i in axis]
     elif isinstance(axis, Variable):
+        coverage[3] = True
         if NoneConst.equals(axis):
+            coverage[4] = True
             normalized_axis = []
         elif not isinstance(axis, TensorConstant):
+            coverage[5] = True
             raise TypeError(f"Computation needs a constant axis. Got {axis}")
         else:
+            coverage[6] = True
             assert axis.dtype in integer_dtypes
             if isinstance(axis.data, (int, np.integer)) or (
                 isinstance(axis.data, np.ndarray) and axis.data.ndim == 0
-            ): # 3 Decisions
+            ):  # 3 Decisions
+                coverage[7] = True
                 normalized_axis = [int(axis.data)]
             elif isinstance(axis.data, (list, np.ndarray)):
-                normalized_axis = [int(i) for i in axis.data] 
+                coverage[8] = True
+                normalized_axis = [int(i) for i in axis.data]
+            coverage[9] = True
     else:
+        coverage[10] = True
         raise TypeError(
             f"Axis must be an integer, tuple, list of integers or a TensorVariable. Got {axis}"
         )
-    
+    coverage[11] = True
     return normalized_axis
 
-def validate_axis_values(axis, x):
+
+def validate_axis_values(axis, x, coverage):
     """
     Utility function utilized by `check_and_normalize_axes` to validate the axis values
 
@@ -577,19 +590,26 @@ def validate_axis_values(axis, x):
     :rtype: List[int]
     """
     validated_axis = axis
-    if len(axis) > 0: 
-        for i in range(len(axis)): 
-            if axis[i] < 0: 
+    if len(axis) > 0:
+        coverage[12] = True
+        for i in range(len(axis)):
+            coverage[13] = True
+            if axis[i] < 0:
+                coverage[14] = True
                 axis[i] += x.type.ndim
-            if axis[i] < 0 or axis[i] >= x.type.ndim: 
+            if axis[i] < 0 or axis[i] >= x.type.ndim:
+                coverage[15] = True
                 raise ValueError(
                     f"Computation needs a valid axis number for {int(x.type.ndim)}-D tensor. Got {int(axis[i])}"
-                ) 
+                )
+        coverage[16] = True
         validated_axis = list(set(axis))
         validated_axis.sort()
+    coverage[17] = True
     return validated_axis
 
-def check_and_normalize_axes(x, axis):
+
+def check_and_normalize_axes(x, axis, coverage={}):
     """Check axes, normalize and convert them to a Python list of integers.
 
     Parameters
@@ -603,8 +623,8 @@ def check_and_normalize_axes(x, axis):
         Return an empty list if argument is None.
     """
     x = as_tensor_variable(x)
-    normalized_axis = normalize_axis_type(axis)
-    validated_axis = validate_axis_values(normalized_axis, x)
+    normalized_axis = normalize_axis_type(axis, coverage=coverage)
+    validated_axis = validate_axis_values(normalized_axis, x, coverage=coverage)
 
     return validated_axis
 
@@ -1616,7 +1636,9 @@ class Mean(FixedOpCAReduce):
 #      return grad(mean(x, self.axis, op=False),[x])
 
 
-def mean(input, axis=None, dtype=None, op=False, keepdims=False, acc_dtype=None):
+def mean(
+    input, axis=None, dtype=None, op=False, keepdims=False, acc_dtype=None, coverage={}
+):
     """
     Computes the mean value along the given axis(es) of a tensor `input`.
 
@@ -1642,26 +1664,34 @@ def mean(input, axis=None, dtype=None, op=False, keepdims=False, acc_dtype=None)
     """
     input = as_tensor_variable(input)
     if op:
+        coverage[0] = True
         if dtype not in (None, "float64"):
+            coverage[1] = True
             raise NotImplementedError(
                 "The Mean op does not support the dtype argument, "
                 "and will always use float64. If you want to specify "
                 "the dtype, call tensor.mean(..., op=False).",
                 dtype,
             )
+        coverage[2] = True
         if acc_dtype not in (None, "float64"):
+            coverage[3] = True
             raise NotImplementedError(
                 "The Mean op does not support the acc_dtype argument, "
                 "and will always use float64. If you want to specify "
                 "acc_dtype, call tensor.mean(..., op=False).",
                 dtype,
             )
+        coverage[4] = True
         out = Mean(axis)(input)
         if keepdims:
+            coverage[5] = True
             out = makeKeepDims(input, out, axis)
+        coverage[6] = True
         return out
 
-    sum_dtype = __find_sum_data_type(dtype, input)
+    coverage[7] = True
+    sum_dtype = __find_sum_data_type(dtype, input, coverage)
 
     s = sum(input, axis=axis, dtype=sum_dtype, keepdims=keepdims, acc_dtype=acc_dtype)
     shp = shape(input)
@@ -1669,25 +1699,28 @@ def mean(input, axis=None, dtype=None, op=False, keepdims=False, acc_dtype=None)
     # Cast shp into a float type
     # TODO Once we have a consistent casting policy, we could simply
     # use true_div.
-    shp = __cast_shape_to_float(s, shp)
+    shp = __cast_shape_to_float(s, shp, coverage)
 
-    axis = __normalize_axis_type(axis, input)
+    axis = __normalize_axis_type(axis, input, coverage)
 
     # This sequential division will possibly be optimized by PyTensor:
     for i in axis:
+        coverage[17] = True
         s = true_div(s, shp[i])
 
     # This can happen when axis is an empty list/tuple
     if s.dtype != shp.dtype and s.dtype in discrete_dtypes:
+        coverage[18] = True
         s = cast(s, shp.dtype)
 
     if dtype == "float16" or (dtype is None and input.dtype == "float16"):
+        coverage[19] = True
         s = cast(s, "float16")
     s.name = "mean"
     return s
 
 
-def __find_sum_data_type(dtype, input_tensor):
+def __find_sum_data_type(dtype, input_tensor, coverage):
     """
     Find the appropriate type to use when using `sum` on the tensor.
 
@@ -1699,18 +1732,21 @@ def __find_sum_data_type(dtype, input_tensor):
         The input tensor for which the sum will be computed on.
     """
     if dtype is not None:
+        coverage[8] = True
         # The summation will be done with the specified dtype.
         # sum() will complain if it is not suitable.
         sum_dtype = dtype
     else:
+        coverage[9] = True
         sum_dtype = None
         # float16 overflows on the cast way too often
         if input_tensor.dtype == "float16":
+            coverage[10] = True
             sum_dtype = "float32"
     return sum_dtype
 
 
-def __cast_shape_to_float(obj, shp):
+def __cast_shape_to_float(obj, shp, coverage):
     """
     Cast the shape to the appropriate float form.
 
@@ -1722,12 +1758,14 @@ def __cast_shape_to_float(obj, shp):
         The shape of `obj` or as its been transformed so far.
     """
     if obj.dtype in ("float16", "float32", "complex64"):
+        coverage[11] = True
         return cast(shp, "float32")
     else:
+        coverage[12] = True
         return cast(shp, "float64")
 
 
-def __normalize_axis_type(axis, input_tensor):
+def __normalize_axis_type(axis, input_tensor, coverage):
     """
     Normalize the axis data type to a list of integers.
 
@@ -1739,12 +1777,16 @@ def __normalize_axis_type(axis, input_tensor):
         The input tensor for which the sum will be computed on.
     """
     if axis is None:
+        coverage[13] = True
         return list(range(input_tensor.ndim))
     elif isinstance(axis, (int, np.integer)):
+        coverage[14] = True
         return [axis]
     elif isinstance(axis, np.ndarray) and axis.ndim == 0:
+        coverage[15] = True
         return [int(axis)]
     else:
+        coverage[16] = True
         return [int(a) for a in axis]
 
 
