@@ -17,6 +17,10 @@
     - Implemented tests to increase branch coverage for the function `index_vars_to_types`
 - Andreas
 - Casper
+    - Collaborated with Andreas & Adam to write the coverage tool
+    - Analyzed CC for the function `get_canonical_form_slice`
+    - Implemented CC improvement/reduction for the function `get_canonical_form_slice`
+    - Implemented tests to increase branch coverage for the function `get_canonical_form_slice`
 - Martin:
     - Collaborated with Victor to create the project report
     - Analyzed CC for the function `check_and_normalize_axes`
