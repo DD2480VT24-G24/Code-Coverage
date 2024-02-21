@@ -524,6 +524,70 @@ def makeKeepDims(x, y, axis):
             i += 1
     return DimShuffle(y.type.broadcastable, new_dims)(y)
 
+def normalize_axis_type(axis):
+    """
+    Utility function utilized by `check_and_normalize_axes` to normalize the axis
+
+    :param axis: Axis to normalize
+    :type axis: int, Tuple[int], List[int] or TensorVariable
+
+    :return: The normalized axis
+    :rtype: List[int] or []
+    """
+
+    if axis is None:
+        normalized_axis = []
+    elif isinstance(axis, (int, np.integer)) or (
+        isinstance(axis, np.ndarray) and axis.ndim == 0
+    ): # 3 Decision 
+        normalized_axis = [int(axis)]
+    elif isinstance(axis, (tuple, list, np.ndarray)):
+        normalized_axis = [int(i) for i in axis] 
+    elif isinstance(axis, Variable):
+        if NoneConst.equals(axis):
+            normalized_axis = []
+        elif not isinstance(axis, TensorConstant):
+            raise TypeError(f"Computation needs a constant axis. Got {axis}")
+        else:
+            assert axis.dtype in integer_dtypes
+            if isinstance(axis.data, (int, np.integer)) or (
+                isinstance(axis.data, np.ndarray) and axis.data.ndim == 0
+            ): # 3 Decisions
+                normalized_axis = [int(axis.data)]
+            elif isinstance(axis.data, (list, np.ndarray)):
+                normalized_axis = [int(i) for i in axis.data] 
+    else:
+        raise TypeError(
+            f"Axis must be an integer, tuple, list of integers or a TensorVariable. Got {axis}"
+        )
+    
+    return normalized_axis
+
+def validate_axis_values(axis, x):
+    """
+    Utility function utilized by `check_and_normalize_axes` to validate the axis values
+
+    :param axis: The axis of which the values should be validated
+    :type axis: int, Tuple[int] or List[int]
+
+    :param x: The tensor variable associated with the axis
+    :type x: TensorVariable
+
+    :return: The axis with validated values
+    :rtype: List[int]
+    """
+    validated_axis = axis
+    if len(axis) > 0: 
+        for i in range(len(axis)): 
+            if axis[i] < 0: 
+                axis[i] += x.type.ndim
+            if axis[i] < 0 or axis[i] >= x.type.ndim: 
+                raise ValueError(
+                    f"Computation needs a valid axis number for {int(x.type.ndim)}-D tensor. Got {int(axis[i])}"
+                ) 
+        validated_axis = list(set(axis))
+        validated_axis.sort()
+    return validated_axis
 
 def check_and_normalize_axes(x, axis):
     """Check axes, normalize and convert them to a Python list of integers.
@@ -537,58 +601,12 @@ def check_and_normalize_axes(x, axis):
     -------
     axis: list of integers
         Return an empty list if argument is None.
-
-    Cyclomatic complexity:
-    
-    Excluding raise as exit point:
-    pi = total amount of decisions = 19
-    s = total amount of exit points = 1
-    M = pi - s + 2 = 19 - 1 + 2 = 20
-
-    Including raise as exit point:
-    pi = 19
-    s = 3
-    M = pi - s + 2 = 19 - 3 + 2 = 18
-
     """
     x = as_tensor_variable(x)
+    normalized_axis = normalize_axis_type(axis)
+    validated_axis = validate_axis_values(normalized_axis, x)
 
-    if axis is None: # 1 Decision 
-        axis = []
-    elif isinstance(axis, (int, np.integer)) or (
-        isinstance(axis, np.ndarray) and axis.ndim == 0
-    ): # 3 Decision 
-        axis = [int(axis)]
-    elif isinstance(axis, (tuple, list, np.ndarray)): # 1 Decision 
-        axis = [int(i) for i in axis] # 1 Decision 
-    elif isinstance(axis, Variable): # 1 Decision 
-        if NoneConst.equals(axis): # 1 Decision 
-            axis = []
-        elif not isinstance(axis, TensorConstant): # 1 Decision 
-            raise TypeError(f"Computation needs a constant axis. Got {axis}") # Potential exit point
-        else:
-            assert axis.dtype in integer_dtypes
-            if isinstance(axis.data, (int, np.integer)) or (
-                isinstance(axis.data, np.ndarray) and axis.data.ndim == 0
-            ): # 3 Decisions
-                axis = [int(axis.data)]
-            elif isinstance(axis.data, (list, np.ndarray)): # 1 Decision 
-                axis = [int(i) for i in axis.data] # 1 Decision 
-    else:
-        raise TypeError(
-            f"Axis must be an integer, tuple, list of integers or a TensorVariable. Got {axis}"
-        ) # Potential exit point
-    if len(axis) > 0: # 1 Decision 
-        for i in range(len(axis)): # 1 Decision 
-            if axis[i] < 0: # 1 Decision 
-                axis[i] += x.type.ndim
-            if axis[i] < 0 or axis[i] >= x.type.ndim: # 2 Decisions
-                raise ValueError(
-                    f"Computation needs a valid axis number for {int(x.type.ndim)}-D tensor. Got {int(axis[i])}"
-                ) # Potential exit point
-        axis = list(set(axis))
-        axis.sort()
-    return axis # Exit point
+    return validated_axis
 
 
 def max_and_argmax(a, axis=None, keepdims=False):
