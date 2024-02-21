@@ -185,141 +185,263 @@ def get_idx_list(inputs, idx_list):
     return indices_from_subtensor(inputs[1:], idx_list)
 
 
-def get_canonical_form_slice(
-    theslice: Union[slice, Variable], length: Variable
-) -> tuple[Variable, int]:
-    """Convert slices to canonical form.
-
-    Given a slice [start:stop:step] transform it into a canonical form
-    that respects the conventions imposed by python and numpy.
-
-    In a canonical form a slice is represented by a canonical form slice,
-    in which 0 <= start <= stop <= length and step > 0, and a flag which says
-    if the resulting set of numbers needs to be reversed or not.
-
+def handle_non_slice_case(theslice, length, coverage):
     """
-    from pytensor.tensor import ge, lt, sign, switch
+    Handles cases where the input is not a slice, attempting to convert it into a canonical form.
 
-    if not isinstance(theslice, slice):     # Edge 1
-        try:        # Edge 2
-            value = as_index_literal(theslice)
-        except NotScalarConstantError:
-            value = theslice
+    Args:
+        theslice: The input that is not a slice, which could be an index or another type.
+        length: The length of the sequence for which the slice is being computed.
+        coverage: A dictionary tracking which branches of code are executed for coverage purposes.
 
-        value = switch(lt(value, 0), (value + length), value)
+    Returns:
+        A tuple containing the canonical form of the input (if possible) and a flag indicating
+        whether the result needs to be reversed (always 1 in this case since it's a single index).
+    """
+    from pytensor.tensor import switch, lt
+    coverage["branch_0"] = True
+    try:
+        coverage["branch_1"] = True
+        value = as_index_literal(theslice)
+    except NotScalarConstantError:
+        coverage["branch_2"] = True
+        value = theslice
 
-        return value, 1     # Node 1
+    # Adjust value if it's negative, adding the length to wrap around
+    value = switch(lt(value, 0), (value + length), value)
 
-    def analyze(x):
-        try:
-            x_constant = as_index_literal(x)
-            is_constant = True
-        except NotScalarConstantError:
-            x_constant = x
-            is_constant = False
-        return x_constant, is_constant
+    return value, 1
 
-    start, is_start_constant = analyze(theslice.start)
-    stop, is_stop_constant = analyze(theslice.stop)
-    step, is_step_constant = analyze(theslice.step)
-    length, is_length_constant = analyze(length)
 
-    if (
-        is_start_constant
-        and is_stop_constant
-        and is_step_constant
-        and is_length_constant
-    ):      # Edge 3
+def analyze(x, coverage):
+    """
+    Analyze the input value and determine if it is a constant.
+
+    Args:
+        x: The input value to be analyzed.
+        coverage: A dictionary to track code coverage.
+
+    Returns:
+        x_constant: The analyzed value, which may be converted to a constant.
+        is_constant: A boolean indicating whether the value is a constant.
+
+    Raises:
+        NotScalarConstantError: If the input value is not a scalar constant.
+    """
+
+    try:
+        coverage["branch_3"] = True
+        x_constant = as_index_literal(x)
+        is_constant = True
+    except NotScalarConstantError:
+        coverage["branch_4"] = True
+        x_constant = x
+        is_constant = False
+    return x_constant, is_constant
+
+
+def preprocess_slice_components(theslice, length, coverage):
+    """
+    Preprocess the components of a slice object and analyze their constantness.
+
+    Args:
+        theslice: The slice object to be preprocessed.
+        length: The length of the sequence being sliced.
+        coverage: A dictionary to track code coverage.
+
+    Returns:
+        A dictionary containing the preprocessed components of the slice object and their constantness.
+    """
+
+    start, is_start_constant = analyze(theslice.start, coverage)
+    stop, is_stop_constant = analyze(theslice.stop, coverage)
+    step, is_step_constant = analyze(theslice.step, coverage)
+    length, is_length_constant = analyze(length, coverage)
+
+    if (is_start_constant and is_stop_constant and is_step_constant and is_length_constant):
+        coverage["branch_5"] = True
         _start, _stop, _step = slice(start, stop, step).indices(length)
-        if _start <= _stop and _step >= 1:      # Edge 4
-            return slice(_start, _stop, _step), 1       # Node 2
+        if _start <= _stop and _step >= 1:
+            coverage["branch_6"] = True
+            return {"slice": slice(_start, _stop, _step), "flag": 1}
 
-    if step is None:        # Edge 5
+    if step is None:
+        coverage["branch_7"] = True
         step = 1
         is_step_constant = True
 
-    # First handle the easier and common case where `step` is 1 and
-    # either `start` or `stop` is a range boundary. More specializations
-    # could be added later. This makes the resulting graph smaller than
-    # in the generic case below.
-    if step == 1:       # Edge 6
-        is_start_0 = (
-            start is None
-            or start == 0
-            or (
-                is_start_constant
-                and is_length_constant
-                and start < 0
-                and start + length <= 0
-            )
-        )       # Edge 7
-        is_stop_length = (
-            stop is None
-            or stop in [length, sys.maxsize]
-            or (is_stop_constant and is_length_constant and stop >= length)
-        )       # Edge 8
-        if is_start_0:      # Edge 9
-            # 0:stop:1
-            if is_stop_length:      # Edge 10
-                # Full slice.
-                return slice(0, length, 1), 1       # Node 3
-            if is_stop_constant and stop >= 0:      # Edge 11
-                return (slice(0, switch(lt(stop, length), stop, length), 1), 1)     # Node 4
-            stop_plus_len = stop + length
-            stop = switch(
-                lt(stop, 0),
-                # stop < 0
-                switch(
-                    lt(stop_plus_len, 0),
-                    # stop + len < 0
-                    0,
-                    # stop + len >= 0
-                    stop_plus_len,
-                ),
-                # stop >= 0: use min(stop, length)
-                switch(lt(stop, length), stop, length),
-            )
-            return slice(0, stop, 1), 1     # Node 5
-        elif is_stop_length:        # Edge 12
-            # start:length:1
-            if is_start_constant and start >= 0:        # Edge 13
-                return slice(switch(lt(start, length), start, length), length, 1), 1        # Node 6
-            start_plus_len = start + length
-            start = switch(
-                lt(start, 0),
-                # start < 0
-                switch(
-                    lt(start_plus_len, 0),
-                    # start + len < 0
-                    0,
-                    # start + len >= 0
-                    start_plus_len,
-                ),
-                # start >= 0: use min(start, length)
-                switch(lt(start, length), start, length),
-            )
-            return slice(start, length, 1), 1       # Node 7
+    return {
+        "start": start,
+        "stop": stop,
+        "step": step,
+        "length": length,
+        "is_start_constant": is_start_constant,
+        "is_stop_constant": is_stop_constant,
+        "is_step_constant": is_step_constant,
+        "is_length_constant": is_length_constant,
+    }
 
-    # This is the generic case.
 
-    if is_step_constant:        # Edge 14
+def handle_zero_start(is_stop_length, stop, length, is_stop_constant, coverage):
+    """
+    Handle the case where the start value is zero in a slice operation.
+
+    Args:
+        is_stop_length: A boolean indicating whether the stop value is equal to the length.
+        stop: The stop value of the slice.
+        length: The length of the sequence being sliced.
+        is_stop_constant: A boolean indicating whether the stop value is a constant.
+        coverage: A dictionary to track code coverage.
+
+    Returns:
+        If the slice can be simplified to a start of zero, returns a tuple containing the simplified slice object and a flag indicating success. Otherwise, returns False, False.
+    """
+    from pytensor.tensor import lt, switch
+
+    coverage["branch_9"] = True
+    # 0:stop:1
+    if is_stop_length:
+        coverage["branch_10"] = True
+        # Full slice.
+        return slice(0, length, 1), 1
+    if is_stop_constant and stop >= 0:
+        coverage["branch_11"] = True
+        return (slice(0, switch(lt(stop, length), stop, length), 1), 1)
+    stop_plus_len = stop + length
+    stop = switch(
+        lt(stop, 0),
+        # stop < 0
+        switch(
+            lt(stop_plus_len, 0),
+            # stop + len < 0
+            0,
+            # stop + len >= 0
+            stop_plus_len,
+        ),
+        # stop >= 0: use min(stop, length)
+        switch(lt(stop, length), stop, length),
+    )
+    return slice(0, stop, 1), 1
+
+
+def handle_start_length_case(start, length, is_start_constant, coverage):
+    """
+    Handle the case where the step is 1 and the stop value is None or length.
+
+    Args:
+        start: The start value of the slice.
+        length: The length of the sequence being sliced.
+        is_start_constant: A boolean indicating whether the start value is a constant.
+        coverage: A dictionary to track code coverage.
+
+    Returns:
+        If the slice can be simplified to a step one slice, returns a tuple containing the simplified slice object and a flag indicating success. Otherwise, returns False, False.
+    """
+
+    from pytensor.tensor import lt, switch
+
+    coverage["branch_12"] = True
+    # start:length:1
+    if is_start_constant and start >= 0:
+        coverage["branch_13"] = True
+        return slice(switch(lt(start, length), start, length), length, 1), 1
+    start_plus_len = start + length
+    start = switch(
+        lt(start, 0),
+        # start < 0
+        switch(
+            lt(start_plus_len, 0),
+            # start + len < 0
+            0,
+            # start + len >= 0
+            start_plus_len,
+        ),
+        # start >= 0: use min(start, length)
+        switch(lt(start, length), start, length),
+    )
+    return slice(start, length, 1), 1
+
+
+def handle_step_one(start, stop, length, is_start_constant, is_stop_constant, is_length_constant, coverage):
+    """
+    Handle the case where the step is one in a slice operation.
+
+    Args:
+        start: The start value of the slice.
+        stop: The stop value of the slice.
+        length: The length of the sequence being sliced.
+        is_start_constant: A boolean indicating whether the start value is a constant.
+        is_stop_constant: A boolean indicating whether the stop value is a constant.
+        is_length_constant: A boolean indicating whether the length value is a constant.
+        coverage: A dictionary to track code coverage.
+
+    Returns:
+        If the slice can be simplified to a step one slice, returns a tuple containing the simplified slice object and a flag indicating success. Otherwise, returns False, False.
+    """
+    coverage["branch_8"] = True
+    is_start_0 = (start is None
+        or start == 0
+        or (
+            is_start_constant
+            and is_length_constant
+            and start < 0
+            and start + length <= 0
+        )
+    )
+    is_stop_length = (
+        stop is None
+        or stop in [length, sys.maxsize]
+        or (is_stop_constant and is_length_constant and stop >= length)
+    )
+    if is_start_0:
+        return handle_zero_start(is_stop_length, stop, length, is_stop_constant, coverage)
+
+    elif is_stop_length:
+        return handle_start_length_case(start, length, is_start_constant, coverage)
+
+    return False, False
+
+
+def step_manager(step, is_step_constant, coverage):
+    """
+    Manage the step value in a slice operation.
+
+    Args:
+        step: The step value of the slice.
+        is_step_constant: A boolean indicating whether the step value is a constant.
+        coverage: A dictionary to track code coverage.
+
+    Returns:
+        A tuple containing three elements:
+        - switch_neg_step: A function that switches between two values based on the sign of the step.
+        - abs_step: The absolute value of the step.
+        - sgn_step: The sign of the step.
+    """
+
+    from pytensor.tensor import lt, sign, switch
+
+    if is_step_constant:
+        coverage["branch_14"] = True
         # When we know the sign of `step`, the graph can be made simpler.
-        assert step != 0    # Node 8
-        if step > 0:        # Edge 15
+        assert step != 0
+        if step > 0:
+            coverage["branch_15"] = True
 
             def switch_neg_step(a, b):
                 return b
 
             abs_step = step
             sgn_step = 1
-        else:       # Edge 16
+        else:
+            coverage["branch_16"] = True
 
             def switch_neg_step(a, b):
                 return a
 
             abs_step = -step
             sgn_step = -1
-    else:       # Edge 17
+    else:
+        coverage["branch_17"] = True
         is_step_neg = lt(step, 0)
 
         def switch_neg_step(a, b):
@@ -328,23 +450,65 @@ def get_canonical_form_slice(
         abs_step = abs(step)
         sgn_step = sign(step)
 
+    return switch_neg_step, abs_step, sgn_step
+
+
+def process_start_stop(start, stop, length, switch_neg_step, coverage):
+    """
+    Process the start and stop values in a slice operation.
+
+    Args:
+        start: The start value of the slice.
+        stop: The stop value of the slice.
+        length: The length of the sequence being sliced.
+        switch_neg_step: A function that switches between two values based on the sign of the step.
+        coverage: A dictionary to track code coverage.
+
+    Returns:
+        A tuple containing the processed start and stop values.
+    """
+
+    from pytensor.tensor import ge, lt, switch
     defstart = switch_neg_step(length - 1, 0)
     defstop = switch_neg_step(-1, length)
-    if start is None:       # Edge 18
+    if start is None:
+        coverage["branch_18"] = True
         start = defstart
-    else:       # Edge 19
+    else:
+        coverage["branch_19"] = True
         start = switch(lt(start, 0), start + length, start)
         start = switch(lt(start, 0), switch_neg_step(-1, 0), start)
         start = switch(ge(start, length), switch_neg_step(length - 1, length), start)
-    if stop is None or stop == sys.maxsize:     # Edge 20
+    if stop is None or stop == sys.maxsize:
+        coverage["branch_20"] = True
         # The special "maxsize" case is probably not needed here,
         # as slices containing maxsize are not generated by
         # __getslice__ anymore.
         stop = defstop
-    else:       # Edge 21
+    else:
+        coverage["branch_21"] = True
         stop = switch(lt(stop, 0), stop + length, stop)
         stop = switch(lt(stop, 0), -1, stop)
         stop = switch(ge(stop, length), length, stop)
+
+    return start, stop
+
+
+def transform_slice(start, stop, abs_step, switch_neg_step):
+    """
+    Transform the start and stop values in a slice operation based on the step.
+
+    Args:
+        start: The start value of the slice.
+        stop: The stop value of the slice.
+        abs_step: The absolute value of the step.
+        switch_neg_step: A function that switches between two values based on the sign of the step.
+
+    Returns:
+        A tuple containing the transformed start and stop values.
+    """
+
+    from pytensor.tensor import lt, switch
 
     nw_stop = switch_neg_step(start + 1, stop)
     slice_len = (start - stop - 1) // abs_step + 1
@@ -357,12 +521,75 @@ def get_canonical_form_slice(
     # Ensure start <= stop.
     nw_start = switch(lt(nw_start, nw_stop), nw_start, nw_stop)
 
+    return nw_start, nw_stop
+
+
+def handle_generic_case(start, stop, step, length, is_step_constant, coverage):
+    """
+    Handle the generic case of a slice operation.
+
+    Args:
+        start: The start value of the slice.
+        stop: The stop value of the slice.
+        step: The step value of the slice.
+        length: The length of the sequence being sliced.
+        is_step_constant: A boolean indicating whether the step value is a constant.
+        coverage: A dictionary to track code coverage.
+
+    Returns:
+        A tuple containing the processed slice object and a flag indicating whether the slice should be reversed.
+    """
+
+    switch_neg_step, abs_step, sgn_step = step_manager(step, is_step_constant, coverage)
+    start, stop = process_start_stop(start, stop, length, switch_neg_step, coverage)
+
+    nw_start, nw_stop = transform_slice(start, stop, abs_step, switch_neg_step)
+
     nw_step = abs_step
-    if step != 1:       # Edge 22
+    if step != 1:
+        coverage["branch_22"] = True
         reverse = sgn_step
-        return slice(nw_start, nw_stop, nw_step), reverse       # Node 9
-    else:       # Edge 23
-        return slice(nw_start, nw_stop, nw_step), 1     # Node 10
+        return slice(nw_start, nw_stop, nw_step), reverse
+    else:
+        coverage["branch_23"] = True
+        return slice(nw_start, nw_stop, nw_step), 1
+
+
+def get_canonical_form_slice(
+    theslice: Union[slice, Variable], length: Variable, coverage={f"branch_{i}": False for i in range(24)}
+) -> tuple[Variable, int]:
+    """Convert slices to canonical form.
+
+    Given a slice [start:stop:step] transform it into a canonical form
+    that respects the conventions imposed by python and numpy.
+
+    In a canonical form a slice is represented by a canonical form slice,
+    in which 0 <= start <= stop <= length and step > 0, and a flag which says
+    if the resulting set of numbers needs to be reversed or not.
+
+    """
+    if not isinstance(theslice, slice):
+        return handle_non_slice_case(theslice, length, coverage)
+
+    data = preprocess_slice_components(theslice, length, coverage)
+
+    if data.get("slice"):
+        return data["slice"], data["flag"]
+
+    start, stop, step, length = data["start"], data["stop"], data["step"], data["length"]
+    is_start_constant, is_stop_constant, is_step_constant, is_length_constant = data["is_start_constant"], data["is_stop_constant"], data["is_step_constant"], data["is_length_constant"]
+
+    # First handle the easier and common case where `step` is 1 and
+    # either `start` or `stop` is a range boundary. More specializations
+    # could be added later. This makes the resulting graph smaller than
+    # in the generic case below.
+    if step == 1:
+        slice_data, flag = handle_step_one(start, stop, length, is_start_constant, is_stop_constant, is_length_constant, coverage)
+        if slice_data:
+            return slice_data, flag
+
+    # This is the generic case.
+    return handle_generic_case(start, stop, step, length, is_step_constant, coverage)
 
 
 def range_len(slc):
