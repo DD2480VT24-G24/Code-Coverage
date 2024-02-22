@@ -9,3 +9,29 @@
     - Excluding raise as exit point #decisions = 19, #exit points = 1 => M = 20 (Same as Lizard tool)
     - Including raise as exit point #decisions = 19, #exit points = 3 => M = 18
 
+## Statements of contribution
+- Adam
+    - Collaborated with Andreas & Casper to write the coverage tool
+    - Analyzed CC for the function `index_vars_to_types`
+    - Implemented CC improvement/reduction for the function `index_vars_to_types`
+    - Implemented tests to increase branch coverage for the function `index_vars_to_types`
+- Andreas
+    - Collaborated with Adam & Casper to write the coverage tool
+    - Analyzed CC for the function `mean`
+    - Implemented CC improvement/reduction for the function `mean`
+    - Implemented tests to increase branch coverage for the function `mean`
+- Casper
+    - Collaborated with Andreas & Adam to write the coverage tool
+    - Analyzed CC for the function `get_canonical_form_slice`
+    - Implemented CC improvement/reduction for the function `get_canonical_form_slice`
+    - Implemented tests to increase branch coverage for the function `get_canonical_form_slice`
+- Martin:
+    - Collaborated with Victor to create the project report
+    - Analyzed CC for the function `check_and_normalize_axes`
+    - Implemented CC improvement/reduction for the function `check_and_normalize_axes`
+    - Implemented tests to increase branch coverage for the function `check_and_normalize_axes`
+- Victor:
+    - Collaborated with Martin to create the project report
+    - Analyzed CC for the function `belongs_to_set`
+    - Implemented CC improvement/reduction for the function `belongs_to_set`
+    - Implemented tests to increase branch coverage for the function `belongs_to_set`
