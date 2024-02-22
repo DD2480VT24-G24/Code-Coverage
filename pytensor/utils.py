@@ -288,17 +288,20 @@ def from_return_values(values):
         return [values]
 
 
-def flatten(a):
+def flatten(a, coverage={f"branch_{i}": False for i in range(3)}):
     """
     Recursively flatten tuple, list and set in a list.
 
     """
     if isinstance(a, (tuple, list, set)):
+        coverage["branch_0"] = True
         l = []
         for item in a:
+            coverage["branch_1"] = True
             l.extend(flatten(item))
         return l
     else:
+        coverage["branch_2"] = True
         return [a]
 
 
